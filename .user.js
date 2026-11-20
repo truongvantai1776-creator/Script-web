@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - Search Inside UI & Image Bit/BW Analyzer
+// @name         Universal UI - Get Web Code & Instant G Result
 // @namespace    http://tampermonkey.net/
-// @version      11.0
-// @description  Tìm kiếm ngay bên trong UI, giữ nút UI nổi và phân tích ảnh trắng đen / đen trắng / chuỗi bit
+// @version      12.0
+// @description  Chỉ giữ tính năng lấy code trong web và nút xanh G hiện kết quả ngay lập tức
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -27,12 +27,38 @@
 
     shadow.innerHTML = `
         <style>
+            .g-btn {
+                position: fixed;
+                bottom: 84px;
+                right: 20px;
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                border: 2px solid #93c5fd;
+                background: #2563eb;
+                color: #ffffff;
+                font-size: 16px;
+                font-weight: 800;
+                font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+                cursor: pointer;
+                box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: transform 0.12s ease, background 0.12s ease;
+                user-select: none;
+                touch-action: none;
+            }
+            .g-btn:hover {
+                background: #1d4ed8;
+                transform: scale(1.05);
+            }
             .toggle-btn {
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                width: 54px;
-                height: 54px;
+                width: 48px;
+                height: 48px;
                 border-radius: 50%;
                 border: none;
                 background: #18181b;
@@ -45,7 +71,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                transition: transform 0.15s ease, background 0.15s ease;
+                transition: transform 0.12s ease, background 0.12s ease;
                 user-select: none;
                 touch-action: none;
             }
@@ -55,11 +81,11 @@
             }
             .main-ui {
                 position: fixed;
-                bottom: 84px;
+                bottom: 142px;
                 right: 20px;
-                width: 380px;
+                width: 370px;
                 max-width: calc(100vw - 32px);
-                max-height: calc(100vh - 108px);
+                max-height: calc(100vh - 165px);
                 background: #111114;
                 color: #f4f4f5;
                 border: 1px solid rgba(255, 255, 255, 0.14);
@@ -101,16 +127,16 @@
                 padding: 12px 14px;
                 display: flex;
                 flex-direction: column;
-                gap: 10px;
+                gap: 9px;
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
             }
-            .btn-grid {
-                display: grid;
-                grid-template-columns: repeat(2, 1fr);
+            .row {
+                display: flex;
                 gap: 8px;
             }
             .ui-btn {
+                flex: 1;
                 padding: 9px 10px;
                 border-radius: 9px;
                 border: 1px solid rgba(255, 255, 255, 0.14);
@@ -124,27 +150,12 @@
             .ui-btn:hover {
                 background: #3f3f46;
             }
-            .ui-btn.active-mode {
+            .ui-btn.blue {
                 background: #2563eb;
                 border-color: #60a5fa;
             }
-            .ui-btn.search-top-btn {
-                grid-column: 1 / -1;
+            .ui-btn.blue:hover {
                 background: #1d4ed8;
-                border-color: #60a5fa;
-                color: #eff6ff;
-            }
-            .panel {
-                display: none;
-                flex-direction: column;
-                gap: 8px;
-                padding: 10px;
-                background: #0b0b0d;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 10px;
-            }
-            .panel.show {
-                display: flex;
             }
             .section-label {
                 font-size: 11px;
@@ -153,124 +164,28 @@
                 text-transform: uppercase;
                 letter-spacing: 0.04em;
             }
-            .search-row {
-                display: flex;
-                gap: 6px;
-            }
-            .input-box {
-                flex: 1;
-                min-width: 0;
-                border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.16);
-                background: #18181c;
-                color: #f4f4f5;
-                font-size: 12px;
-                padding: 7px 9px;
-                outline: none;
-            }
-            .small-btn {
-                padding: 7px 10px;
-                border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.16);
-                background: #27272a;
-                color: #ffffff;
-                font-size: 12px;
-                font-weight: 600;
-                cursor: pointer;
-                white-space: nowrap;
-            }
-            .small-btn.primary {
-                border-color: #60a5fa;
-                background: #1d4ed8;
-            }
-            .found-list {
-                display: flex;
-                flex-direction: column;
-                gap: 6px;
-                max-height: 165px;
-                overflow-y: auto;
-            }
-            .found-item {
-                display: flex;
-                align-items: center;
-                justify-content: space-between;
-                gap: 8px;
-                padding: 6px 8px;
-                border-radius: 7px;
-                background: #16161b;
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                font-size: 11px;
-            }
-            .found-text {
-                min-width: 0;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .found-jump {
-                padding: 4px 8px;
-                border-radius: 6px;
-                border: 1px solid #60a5fa;
-                background: #1d4ed8;
-                color: #ffffff;
-                font-size: 10px;
-                font-weight: 600;
-                cursor: pointer;
-                flex-shrink: 0;
-            }
-            .gallery {
-                display: grid;
-                grid-template-columns: repeat(4, 1fr);
-                gap: 6px;
-                max-height: 145px;
-                overflow-y: auto;
-            }
-            .thumb-item {
-                position: relative;
-                aspect-ratio: 1 / 1;
-                border-radius: 6px;
-                overflow: hidden;
-                border: 2px solid transparent;
-                background: #18181c;
-                cursor: pointer;
-                padding: 0;
-            }
-            .thumb-item.active {
-                border-color: #3b82f6;
-            }
-            .thumb-item img {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                display: block;
-            }
-            .thumb-name {
-                position: absolute;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0, 0, 0, 0.72);
-                color: #f4f4f5;
-                font-size: 9px;
-                padding: 2px 3px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .preview-canvas {
-                max-width: 100%;
-                max-height: 135px;
-                border-radius: 6px;
-                background: #18181c;
-                align-self: center;
-            }
-            .data-box {
+            .result-box {
                 width: 100%;
                 min-height: 95px;
-                max-height: 160px;
+                max-height: 140px;
                 box-sizing: border-box;
                 border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(96, 165, 250, 0.35);
+                background: #0b1120;
+                color: #dbeafe;
+                font-size: 12px;
+                line-height: 1.45;
+                padding: 8px 10px;
+                resize: vertical;
+                outline: none;
+            }
+            .code-box {
+                width: 100%;
+                min-height: 140px;
+                max-height: 220px;
+                box-sizing: border-box;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.14);
                 background: #09090b;
                 color: #86efac;
                 font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -280,16 +195,6 @@
                 resize: vertical;
                 outline: none;
             }
-            .threshold-row {
-                display: flex;
-                justify-content: space-between;
-                font-size: 11px;
-                color: #d4d4d8;
-            }
-            input[type="range"] {
-                width: 100%;
-                accent-color: #3b82f6;
-            }
             .status-msg {
                 font-size: 11px;
                 color: #93c5fd;
@@ -297,93 +202,40 @@
             }
         </style>
 
+        <button class="g-btn" id="gBtn" title="Hiện kết quả ngay">G</button>
         <button class="toggle-btn" id="toggleBtn" title="Mở/Đóng UI">UI</button>
 
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">Tìm Trong UI & Phân Tích Ảnh</span>
+                <span class="ui-title">Lấy Code Web & Kết Quả G</span>
                 <button class="ui-close" id="closeBtn">&times;</button>
             </div>
             <div class="ui-body">
-                <div class="btn-grid">
-                    <button class="ui-btn search-top-btn" id="btnSearchInUi">0. Tìm kiếm trong UI</button>
-                    <button class="ui-btn" id="btnGetImages">1. Lấy ảnh</button>
-                    <button class="ui-btn" id="btnGray">2. Trắng đen (Xám)</button>
-                    <button class="ui-btn" id="btnBW">3. Đen & Trắng</button>
-                    <button class="ui-btn" id="btnBits">4. Xuất chuỗi Bit</button>
+                <div class="row">
+                    <button class="ui-btn blue" id="getCodeBtn">Lấy code trang web</button>
+                    <button class="ui-btn" id="copyCodeBtn">Copy code</button>
                 </div>
 
-                <!-- Khu vực tìm kiếm ngay bên trong UI -->
-                <div class="panel" id="searchPanel">
-                    <div class="section-label">Tìm từ khóa / tên ngay trong UI</div>
-                    <div class="search-row">
-                        <input class="input-box" type="text" id="uiSearchInput" placeholder="Nhập từ khóa / tên cần tìm..." />
-                        <button class="small-btn primary" id="uiSearchRunBtn">Tìm</button>
-                        <button class="small-btn" id="uiSearchClearBtn">Xóa</button>
-                    </div>
-                    <div class="found-list" id="foundItemsList"></div>
-                </div>
+                <div class="section-label">Kết quả nhanh (Nút G)</div>
+                <textarea class="result-box" id="quickResultBox" placeholder="Bấm nút xanh G để hiện kết quả ngay lập tức..."></textarea>
 
-                <!-- Khu vực ảnh + tìm bằng tên -->
-                <div class="panel" id="imagePanel">
-                    <div class="section-label">Tìm ảnh theo tên & chọn 1 ảnh</div>
-                    <div class="search-row">
-                        <input class="input-box" type="text" id="imgSearchInput" placeholder="Nhập tên ảnh / từ khóa..." />
-                        <button class="small-btn" id="imgSearchBtn">Tìm</button>
-                        <button class="small-btn" id="imgResetBtn">Tất cả</button>
-                    </div>
-                    <div class="gallery" id="gallery"></div>
-                    <canvas class="preview-canvas" id="previewCanvas"></canvas>
-                    <div class="threshold-row">
-                        <span>Ngưỡng đen/trắng</span>
-                        <span id="thresholdVal">128</span>
-                    </div>
-                    <input type="range" id="thresholdSlider" min="0" max="255" value="128" />
-                </div>
+                <div class="section-label">Full Code HTML của trang web</div>
+                <textarea class="code-box" id="codeBox" placeholder="Code của trang web sẽ hiện ở đây..."></textarea>
 
-                <!-- Khu vực kết quả -->
-                <div class="panel show" id="resultPanel">
-                    <div class="section-label">Kết quả tìm kiếm trong UI / Chuỗi Bit</div>
-                    <textarea class="data-box" id="resultBox" placeholder="Kết quả tìm kiếm hoặc chuỗi bit sẽ hiện ngay tại đây..."></textarea>
-                </div>
-
-                <div class="status-msg" id="statusMsg">Sẵn sàng tìm trong UI.</div>
+                <div class="status-msg" id="statusMsg">Sẵn sàng.</div>
             </div>
         </div>
     `;
 
+    const gBtn = shadow.getElementById('gBtn');
     const toggleBtn = shadow.getElementById('toggleBtn');
     const mainUi = shadow.getElementById('mainUi');
     const closeBtn = shadow.getElementById('closeBtn');
-
-    const btnSearchInUi = shadow.getElementById('btnSearchInUi');
-    const btnGetImages = shadow.getElementById('btnGetImages');
-    const btnGray = shadow.getElementById('btnGray');
-    const btnBW = shadow.getElementById('btnBW');
-    const btnBits = shadow.getElementById('btnBits');
-
-    const searchPanel = shadow.getElementById('searchPanel');
-    const uiSearchInput = shadow.getElementById('uiSearchInput');
-    const uiSearchRunBtn = shadow.getElementById('uiSearchRunBtn');
-    const uiSearchClearBtn = shadow.getElementById('uiSearchClearBtn');
-    const foundItemsList = shadow.getElementById('foundItemsList');
-
-    const imagePanel = shadow.getElementById('imagePanel');
-    const imgSearchInput = shadow.getElementById('imgSearchInput');
-    const imgSearchBtn = shadow.getElementById('imgSearchBtn');
-    const imgResetBtn = shadow.getElementById('imgResetBtn');
-    const gallery = shadow.getElementById('gallery');
-    const previewCanvas = shadow.getElementById('previewCanvas');
-    const thresholdSlider = shadow.getElementById('thresholdSlider');
-    const thresholdVal = shadow.getElementById('thresholdVal');
-
-    const resultBox = shadow.getElementById('resultBox');
+    const getCodeBtn = shadow.getElementById('getCodeBtn');
+    const copyCodeBtn = shadow.getElementById('copyCodeBtn');
+    const quickResultBox = shadow.getElementById('quickResultBox');
+    const codeBox = shadow.getElementById('codeBox');
     const statusMsg = shadow.getElementById('statusMsg');
-
-    const ctx = previewCanvas.getContext('2d', { willReadFrequently: true });
-    let allImageRecords = [];
-    let currentImgEl = null;
-    let currentFilterMode = null;
 
     let isOpen = false;
     function setOpen(state) {
@@ -393,402 +245,95 @@
 
     closeBtn.addEventListener('click', () => setOpen(false));
 
-    // Kéo thả nút mở UI + bấm để mở/đóng
-    let dragging = false;
-    let moved = false;
-    let startX = 0;
-    let startY = 0;
-    let origRight = 20;
-    let origBottom = 20;
+    function makeDraggableButton(btn, onClickAction) {
+        let dragging = false;
+        let moved = false;
+        let startX = 0;
+        let startY = 0;
+        let origRight = 20;
+        let origBottom = 20;
 
-    toggleBtn.addEventListener('pointerdown', (e) => {
-        dragging = true;
-        moved = false;
-        startX = e.clientX;
-        startY = e.clientY;
-        origRight = parseInt(toggleBtn.style.right || '20', 10);
-        origBottom = parseInt(toggleBtn.style.bottom || '20', 10);
-        toggleBtn.setPointerCapture(e.pointerId);
-    });
+        btn.addEventListener('pointerdown', (e) => {
+            dragging = true;
+            moved = false;
+            startX = e.clientX;
+            startY = e.clientY;
+            origRight = parseInt(btn.style.right || '20', 10);
+            origBottom = parseInt(btn.style.bottom || '20', 10);
+            btn.setPointerCapture(e.pointerId);
+        });
 
-    toggleBtn.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
-        if (!moved) return;
+        btn.addEventListener('pointermove', (e) => {
+            if (!dragging) return;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
+            if (!moved) return;
 
-        const nextRight = Math.max(8, Math.min(window.innerWidth - 60, origRight - dx));
-        const nextBottom = Math.max(8, Math.min(window.innerHeight - 60, origBottom - dy));
-        toggleBtn.style.right = nextRight + 'px';
-        toggleBtn.style.bottom = nextBottom + 'px';
-    });
+            const nextRight = Math.max(8, Math.min(window.innerWidth - 56, origRight - dx));
+            const nextBottom = Math.max(8, Math.min(window.innerHeight - 56, origBottom - dy));
+            btn.style.right = nextRight + 'px';
+            btn.style.bottom = nextBottom + 'px';
+        });
 
-    toggleBtn.addEventListener('pointerup', () => {
-        if (!dragging) return;
-        dragging = false;
-        if (!moved) {
-            setOpen(!isOpen);
-        }
-    });
-
-    function setActiveButton(activeBtn) {
-        [btnSearchInUi, btnGetImages, btnGray, btnBW, btnBits].forEach((b) => {
-            b.classList.toggle('active-mode', b === activeBtn);
+        btn.addEventListener('pointerup', () => {
+            if (!dragging) return;
+            dragging = false;
+            if (!moved) {
+                onClickAction();
+            }
         });
     }
 
-    // Tìm kiếm ngay trong UI (tìm trong nội dung trang/ảnh/kết quả hiện có và hiển thị danh sách ngay trong UI)
-    function runSearchInsideUi() {
-        const q = uiSearchInput.value.trim();
-        foundItemsList.innerHTML = '';
-
-        if (!q) {
-            statusMsg.textContent = 'Nhập từ khóa hoặc tên cần tìm ngay trong UI.';
-            return;
-        }
-
-        const lowerQ = q.toLowerCase();
-        const matches = [];
-        const seen = new Set();
-
-        // 1. Tìm trong danh sách ảnh đã lấy
-        allImageRecords.forEach((rec, i) => {
-            if (rec.searchable.includes(lowerQ)) {
-                const label = `[Ảnh #${i + 1}] ${rec.displayName}`;
-                if (!seen.has(label)) {
-                    seen.add(label);
-                    matches.push({ label, kind: 'image', record: rec });
-                }
-            }
-        });
-
-        // 2. Tìm trong các dòng/mục chữ trên trang
-        const textNodes = Array.from(document.querySelectorAll('a, button, p, li, h1, h2, h3, h4, span, div, article')).filter(
-            (el) => {
-                if (root.contains(el)) return false;
-                if (el.children.length > 4) return false;
-                const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-                return t.length >= 2 && t.length <= 160 && t.toLowerCase().includes(lowerQ);
-            }
-        );
-
-        for (const el of textNodes) {
-            const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-            if (seen.has(t)) continue;
-            seen.add(t);
-            matches.push({ label: t, kind: 'text', element: el });
-            if (matches.length >= 40) break;
-        }
-
-        if (!matches.length) {
-            foundItemsList.innerHTML = `<div class="found-text">Không thấy "${q}" trong kết quả UI.</div>`;
-            resultBox.value = `Từ khóa: "${q}"\nKết quả: 0 mục khớp.`;
-            statusMsg.textContent = `Không tìm thấy "${q}".`;
-            return;
-        }
-
-        resultBox.value =
-            `Từ khóa tìm trong UI: "${q}"\n` +
-            `Tìm thấy: ${matches.length} mục\n\n` +
-            matches.map((m, idx) => `${idx + 1}. ${m.label}`).join('\n');
-
-        matches.forEach((m) => {
-            const row = document.createElement('div');
-            row.className = 'found-item';
-
-            const txt = document.createElement('div');
-            txt.className = 'found-text';
-            txt.title = m.label;
-            txt.textContent = m.label;
-
-            const actBtn = document.createElement('button');
-            actBtn.className = 'found-jump';
-            actBtn.textContent = m.kind === 'image' ? 'Chọn ảnh' : 'Xem';
-            actBtn.addEventListener('click', async () => {
-                if (m.kind === 'image' && m.record) {
-                    imagePanel.classList.add('show');
-                    currentImgEl = m.record.img;
-                    currentFilterMode = null;
-                    const ok = await drawSourceToCanvas(m.record.img);
-                    statusMsg.textContent = ok
-                        ? `Đã chọn ảnh "${m.record.displayName}" trong UI.`
-                        : `Ảnh "${m.record.displayName}" bị chặn CORS.`;
-                } else if (m.element && m.element.isConnected) {
-                    m.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    resultBox.value = `Mục đã chọn:\n${m.label}`;
-                    statusMsg.textContent = `Đã hiển thị mục "${m.label}" trong UI.`;
-                }
-            });
-
-            row.appendChild(txt);
-            row.appendChild(actBtn);
-            foundItemsList.appendChild(row);
-        });
-
-        statusMsg.textContent = `Tìm thấy ${matches.length} kết quả cho "${q}" ngay trong UI.`;
+    function extractPageCode() {
+        const clone = document.documentElement.cloneNode(true);
+        const injected = clone.querySelector('#custom-ui-root');
+        if (injected) injected.remove();
+        return '<!DOCTYPE html>\n' + clone.outerHTML;
     }
 
-    btnSearchInUi.addEventListener('click', () => {
-        setActiveButton(btnSearchInUi);
-        searchPanel.classList.add('show');
-        uiSearchInput.focus();
+    // Nút xanh G: hiện kết quả ngay lập tức (không chờ đợi)
+    function showInstantResult() {
+        setOpen(true);
+        const htmlCode = extractPageCode();
+        codeBox.value = htmlCode;
+
+        const cleanText = (document.body.innerText || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 450);
+
+        const linkCount = Array.from(document.querySelectorAll('a[href]')).filter((a) => !root.contains(a)).length;
+        const imgCount = Array.from(document.querySelectorAll('img')).filter((img) => !root.contains(img)).length;
+
+        quickResultBox.value =
+            `URL: ${location.href}\n` +
+            `Tiêu đề: ${document.title || '(Không có)'}\n` +
+            `Độ dài code: ${htmlCode.length.toLocaleString()} ký tự | Link: ${linkCount} | Ảnh: ${imgCount}\n` +
+            `Nội dung nổi bật: ${cleanText || '(Trống)'}`;
+
+        statusMsg.textContent = 'Đã hiện kết quả ngay lập tức từ nút G.';
+    }
+
+    makeDraggableButton(gBtn, showInstantResult);
+    makeDraggableButton(toggleBtn, () => setOpen(!isOpen));
+
+    getCodeBtn.addEventListener('click', () => {
+        const htmlCode = extractPageCode();
+        codeBox.value = htmlCode;
+        statusMsg.textContent = `Đã lấy code trang (${htmlCode.length.toLocaleString()} ký tự).`;
     });
 
-    uiSearchRunBtn.addEventListener('click', runSearchInsideUi);
-    uiSearchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') runSearchInsideUi();
-    });
-    uiSearchClearBtn.addEventListener('click', () => {
-        uiSearchInput.value = '';
-        foundItemsList.innerHTML = '';
-        statusMsg.textContent = 'Đã xóa ô tìm kiếm trong UI.';
-    });
-
-    function getImageName(img, idx) {
-        const src = img.currentSrc || img.src || '';
-        let filePart = '';
+    copyCodeBtn.addEventListener('click', async () => {
+        const content = codeBox.value || extractPageCode();
+        codeBox.value = content;
         try {
-            const cleanUrl = src.split('?')[0].split('#')[0];
-            filePart = decodeURIComponent(cleanUrl.split('/').pop() || '');
+            await navigator.clipboard.writeText(content);
+            statusMsg.textContent = 'Đã copy full code.';
         } catch (_) {
-            filePart = src.split('/').pop() || '';
+            codeBox.select();
+            document.execCommand('copy');
+            statusMsg.textContent = 'Đã copy full code.';
         }
-        const alt = (img.alt || '').trim();
-        const title = (img.title || '').trim();
-        const aria = (img.getAttribute('aria-label') || '').trim();
-        const displayName = alt || title || aria || filePart || `Anh-${idx + 1}`;
-        const searchable = `${alt} ${title} ${aria} ${filePart} ${src}`.toLowerCase();
-        return { displayName, searchable };
-    }
-
-    function renderGallery(records) {
-        gallery.innerHTML = '';
-        if (!records.length) {
-            statusMsg.textContent = 'Không có ảnh nào khớp tên tìm kiếm.';
-            return;
-        }
-
-        records.forEach((rec) => {
-            const btn = document.createElement('button');
-            btn.className = 'thumb-item';
-            if (currentImgEl === rec.img) btn.classList.add('active');
-            btn.title = rec.displayName;
-
-            const thumb = document.createElement('img');
-            thumb.src = rec.src;
-            thumb.alt = rec.displayName;
-
-            const badge = document.createElement('span');
-            badge.className = 'thumb-name';
-            badge.textContent = rec.displayName;
-
-            btn.appendChild(thumb);
-            btn.appendChild(badge);
-
-            btn.addEventListener('click', async () => {
-                gallery.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('active'));
-                btn.classList.add('active');
-                currentImgEl = rec.img;
-                currentFilterMode = null;
-                const ok = await drawSourceToCanvas(rec.img);
-                statusMsg.textContent = ok
-                    ? `Đã chọn "${rec.displayName}". Chọn Trắng đen, Đen & Trắng hoặc Xuất chuỗi Bit.`
-                    : `Ảnh "${rec.displayName}" bị chặn CORS.`;
-            });
-
-            gallery.appendChild(btn);
-        });
-    }
-
-    btnGetImages.addEventListener('click', () => {
-        setActiveButton(btnGetImages);
-        imagePanel.classList.add('show');
-
-        const imgs = Array.from(document.querySelectorAll('img')).filter((img) => {
-            if (root.contains(img)) return false;
-            return Boolean(img.currentSrc || img.src);
-        });
-
-        allImageRecords = imgs.map((img, idx) => {
-            const meta = getImageName(img, idx);
-            return {
-                img,
-                src: img.currentSrc || img.src,
-                displayName: meta.displayName,
-                searchable: meta.searchable
-            };
-        });
-
-        renderGallery(allImageRecords);
-        statusMsg.textContent = `Đã lấy ${allImageRecords.length} ảnh vào UI.`;
-    });
-
-    function filterImagesByName() {
-        if (!allImageRecords.length) {
-            btnGetImages.click();
-        }
-        const q = imgSearchInput.value.trim().toLowerCase();
-        if (!q) {
-            renderGallery(allImageRecords);
-            return;
-        }
-        const matched = allImageRecords.filter((r) => r.searchable.includes(q));
-        renderGallery(matched);
-        statusMsg.textContent = `Tìm thấy ${matched.length} ảnh khớp "${imgSearchInput.value.trim()}".`;
-    }
-
-    imgSearchBtn.addEventListener('click', filterImagesByName);
-    imgSearchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') filterImagesByName();
-    });
-    imgResetBtn.addEventListener('click', () => {
-        imgSearchInput.value = '';
-        renderGallery(allImageRecords);
-    });
-
-    async function drawSourceToCanvas(imgEl) {
-        const draw = (srcImg) => {
-            const w = srcImg.naturalWidth || srcImg.width;
-            const h = srcImg.naturalHeight || srcImg.height;
-            if (!w || !h) throw new Error('Ảnh chưa tải xong.');
-
-            const maxSide = 320;
-            const scale = Math.min(1, maxSide / Math.max(w, h));
-            previewCanvas.width = Math.max(1, Math.round(w * scale));
-            previewCanvas.height = Math.max(1, Math.round(h * scale));
-            ctx.clearRect(0, 0, previewCanvas.width, previewCanvas.height);
-            ctx.drawImage(srcImg, 0, 0, previewCanvas.width, previewCanvas.height);
-            ctx.getImageData(0, 0, 1, 1);
-        };
-
-        try {
-            draw(imgEl);
-            return true;
-        } catch (_) {
-            const srcUrl = imgEl.currentSrc || imgEl.src;
-            if (!srcUrl) return false;
-            try {
-                const corsImg = new Image();
-                corsImg.crossOrigin = 'anonymous';
-                await new Promise((resolve, reject) => {
-                    corsImg.onload = resolve;
-                    corsImg.onerror = reject;
-                    corsImg.src = srcUrl;
-                });
-                draw(corsImg);
-                return true;
-            } catch (_) {
-                return false;
-            }
-        }
-    }
-
-    async function runGrayOrBW(mode) {
-        if (!currentImgEl) {
-            imagePanel.classList.add('show');
-            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chọn 1 ảnh trước.';
-            return;
-        }
-
-        const ok = await drawSourceToCanvas(currentImgEl);
-        if (!ok) {
-            statusMsg.textContent = 'Không đọc được pixel ảnh này (chặn CORS).';
-            return;
-        }
-
-        currentFilterMode = mode;
-        const threshold = Number(thresholdSlider.value || 128);
-        const imgData = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-        const d = imgData.data;
-
-        let lightCount = 0;
-        let darkCount = 0;
-
-        for (let i = 0; i < d.length; i += 4) {
-            const lum = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-            if (mode === 'gray') {
-                d[i] = lum;
-                d[i + 1] = lum;
-                d[i + 2] = lum;
-                if (lum >= threshold) lightCount++;
-                else darkCount++;
-            } else {
-                const v = lum >= threshold ? 255 : 0;
-                d[i] = v;
-                d[i + 1] = v;
-                d[i + 2] = v;
-                if (v === 255) lightCount++;
-                else darkCount++;
-            }
-        }
-
-        ctx.putImageData(imgData, 0, 0);
-        const total = lightCount + darkCount;
-        resultBox.value =
-            `Chế độ: ${mode === 'gray' ? 'Trắng đen (Xám)' : 'Đen & Trắng'}\n` +
-            `Ngưỡng: ${threshold}\n` +
-            `Sáng/Trắng: ${lightCount} (${((lightCount / total) * 100).toFixed(1)}%)\n` +
-            `Tối/Đen: ${darkCount} (${((darkCount / total) * 100).toFixed(1)}%)`;
-        statusMsg.textContent = `Đã chuyển sang ${mode === 'gray' ? 'trắng đen (xám)' : 'đen & trắng'}.`;
-    }
-
-    btnGray.addEventListener('click', () => {
-        setActiveButton(btnGray);
-        imagePanel.classList.add('show');
-        runGrayOrBW('gray');
-    });
-
-    btnBW.addEventListener('click', () => {
-        setActiveButton(btnBW);
-        imagePanel.classList.add('show');
-        runGrayOrBW('bw');
-    });
-
-    thresholdSlider.addEventListener('input', () => {
-        thresholdVal.textContent = thresholdSlider.value;
-        if (currentFilterMode) {
-            runGrayOrBW(currentFilterMode);
-        }
-    });
-
-    btnBits.addEventListener('click', async () => {
-        setActiveButton(btnBits);
-        if (!currentImgEl) {
-            imagePanel.classList.add('show');
-            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chọn 1 ảnh trước.';
-            return;
-        }
-
-        const ok = await drawSourceToCanvas(currentImgEl);
-        if (!ok) {
-            statusMsg.textContent = 'Không đọc được pixel ảnh này (chặn CORS).';
-            return;
-        }
-
-        const threshold = Number(thresholdSlider.value || 128);
-        const imgData = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-        const d = imgData.data;
-
-        const cols = Math.min(96, previewCanvas.width);
-        const rows = Math.max(1, Math.round((previewCanvas.height / previewCanvas.width) * cols * 0.55));
-        const stepX = previewCanvas.width / cols;
-        const stepY = previewCanvas.height / rows;
-
-        const lines = [];
-        for (let r = 0; r < rows; r++) {
-            const py = Math.min(previewCanvas.height - 1, Math.floor(r * stepY));
-            let row = '';
-            for (let c = 0; c < cols; c++) {
-                const px = Math.min(previewCanvas.width - 1, Math.floor(c * stepX));
-                const idx = (py * previewCanvas.width + px) * 4;
-                const lum = 0.299 * d[idx] + 0.587 * d[idx + 1] + 0.114 * d[idx + 2];
-                row += lum >= threshold ? '1' : '0';
-            }
-            lines.push(row);
-        }
-
-        resultBox.value = lines.join('\n');
-        statusMsg.textContent = `Đã xuất chuỗi bit (${cols}x${rows}).`;
     });
 })();
