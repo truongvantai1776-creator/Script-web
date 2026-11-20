@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - Toggle Button, Search Fix & Multi Browsers
+// @name         Universal UI - Current Site Item Finder & Multi Browsers
 // @namespace    http://tampermonkey.net/
-// @version      7.3
-// @description  Giữ lại nút UI nổi, nhập từ khóa như "hi" mở thẳng kết quả tìm kiếm và chạy đa trình duyệt
+// @version      9.0
+// @description  Tìm đồ/mục theo đúng web hiện tại đang dùng, phân tích ảnh trắng đen/bit và chạy đa trình duyệt song song
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -57,7 +57,7 @@
                 position: fixed;
                 bottom: 84px;
                 right: 20px;
-                width: 375px;
+                width: 380px;
                 max-width: calc(100vw - 32px);
                 max-height: calc(100vh - 108px);
                 background: #111114;
@@ -105,6 +105,17 @@
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
             }
+            .current-site-tag {
+                font-size: 11px;
+                color: #93c5fd;
+                background: #172554;
+                border: 1px solid rgba(96, 165, 250, 0.35);
+                padding: 6px 9px;
+                border-radius: 8px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
             .btn-grid {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);
@@ -128,14 +139,17 @@
                 background: #2563eb;
                 border-color: #60a5fa;
             }
+            .ui-btn.find-btn {
+                grid-column: 1 / -1;
+                background: #1d4ed8;
+                border-color: #60a5fa;
+                color: #eff6ff;
+            }
             .ui-btn.browser-btn {
                 grid-column: 1 / -1;
                 background: #0f766e;
                 border-color: #2dd4bf;
                 color: #f0fdfa;
-            }
-            .ui-btn.browser-btn:hover {
-                background: #115e59;
             }
             .panel {
                 display: none;
@@ -185,6 +199,41 @@
             .small-btn.teal {
                 border-color: #2dd4bf;
                 background: #0f766e;
+            }
+            .found-list {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+                max-height: 155px;
+                overflow-y: auto;
+            }
+            .found-item {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+                padding: 6px 8px;
+                border-radius: 7px;
+                background: #16161b;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                font-size: 11px;
+            }
+            .found-text {
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .found-open {
+                padding: 4px 8px;
+                border-radius: 6px;
+                border: 1px solid #2dd4bf;
+                background: #0f766e;
+                color: #ffffff;
+                font-size: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                flex-shrink: 0;
             }
             .gallery {
                 display: grid;
@@ -314,22 +363,37 @@
 
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">Bảng Chức Năng & Đa Trình Duyệt</span>
+                <span class="ui-title">Tìm Đồ Theo Web Hiện Tại & Đa Trình Duyệt</span>
                 <button class="ui-close" id="closeBtn">&times;</button>
             </div>
             <div class="ui-body">
+                <div class="current-site-tag" id="currentSiteTag">Web đang dùng: ...</div>
+
                 <div class="btn-grid">
+                    <button class="ui-btn find-btn" id="btnFindOnCurrentSite">0. Tìm đồ / mục trên chính web hiện tại</button>
                     <button class="ui-btn" id="btnGetImages">1. Lấy ảnh</button>
                     <button class="ui-btn" id="btnGray">2. Trắng đen (Xám)</button>
                     <button class="ui-btn" id="btnBW">3. Đen & Trắng</button>
                     <button class="ui-btn" id="btnBits">4. Xuất chuỗi Bit</button>
-                    <button class="ui-btn browser-btn" id="btnMultiBrowser">5. Trình duyệt song song (Mở / Thêm nhiều)</button>
+                    <button class="ui-btn browser-btn" id="btnMultiBrowser">5. Trình duyệt song song (Theo web hiện tại)</button>
                 </div>
 
+                <!-- Khu vực tìm đồ / mục thực tế trên chính web hiện tại -->
+                <div class="panel" id="finderPanel">
+                    <div class="section-label">Tìm tên đồ / mục thực tế trên web này</div>
+                    <div class="search-row">
+                        <input class="input-box" type="text" id="itemSearchInput" placeholder="Nhập tên đồ / từ khóa cần tìm trên web..." />
+                        <button class="small-btn" id="itemSearchBtn">Tìm</button>
+                        <button class="small-btn teal" id="itemSiteSearchBtn">Tìm trên web này</button>
+                    </div>
+                    <div class="found-list" id="foundItemsList"></div>
+                </div>
+
+                <!-- Khu vực ảnh + tìm bằng tên -->
                 <div class="panel" id="imagePanel">
                     <div class="section-label">Tìm ảnh theo tên & chọn 1 ảnh</div>
                     <div class="search-row">
-                        <input class="input-box" type="text" id="imgSearchInput" placeholder="Nhập tên ảnh / từ khóa (alt, tên file)..." />
+                        <input class="input-box" type="text" id="imgSearchInput" placeholder="Nhập tên ảnh / từ khóa..." />
                         <button class="small-btn" id="imgSearchBtn">Tìm</button>
                         <button class="small-btn" id="imgResetBtn">Tất cả</button>
                     </div>
@@ -342,6 +406,7 @@
                     <input type="range" id="thresholdSlider" min="0" max="255" value="128" />
                 </div>
 
+                <!-- Khu vực nhiều trình duyệt con chạy song song -->
                 <div class="panel" id="browserPanel">
                     <div class="url-bar">
                         <button class="small-btn teal" id="addBrowserBtn">+ Thêm trình duyệt</button>
@@ -350,12 +415,13 @@
                     <div class="browser-list" id="browserList"></div>
                 </div>
 
+                <!-- Khu vực kết quả -->
                 <div class="panel show" id="resultPanel">
                     <div class="section-label">Kết quả / Chuỗi Bit</div>
-                    <textarea class="data-box" id="resultBox" placeholder="Bấm các nút phía trên để sử dụng..."></textarea>
+                    <textarea class="data-box" id="resultBox" placeholder="Kết quả sẽ hiển thị ở đây..."></textarea>
                 </div>
 
-                <div class="status-msg" id="statusMsg">Sẵn sàng trên Safari.</div>
+                <div class="status-msg" id="statusMsg">Sẵn sàng theo web hiện tại.</div>
             </div>
         </div>
     `;
@@ -363,12 +429,20 @@
     const toggleBtn = shadow.getElementById('toggleBtn');
     const mainUi = shadow.getElementById('mainUi');
     const closeBtn = shadow.getElementById('closeBtn');
+    const currentSiteTag = shadow.getElementById('currentSiteTag');
 
+    const btnFindOnCurrentSite = shadow.getElementById('btnFindOnCurrentSite');
     const btnGetImages = shadow.getElementById('btnGetImages');
     const btnGray = shadow.getElementById('btnGray');
     const btnBW = shadow.getElementById('btnBW');
     const btnBits = shadow.getElementById('btnBits');
     const btnMultiBrowser = shadow.getElementById('btnMultiBrowser');
+
+    const finderPanel = shadow.getElementById('finderPanel');
+    const itemSearchInput = shadow.getElementById('itemSearchInput');
+    const itemSearchBtn = shadow.getElementById('itemSearchBtn');
+    const itemSiteSearchBtn = shadow.getElementById('itemSiteSearchBtn');
+    const foundItemsList = shadow.getElementById('foundItemsList');
 
     const imagePanel = shadow.getElementById('imagePanel');
     const imgSearchInput = shadow.getElementById('imgSearchInput');
@@ -388,10 +462,13 @@
     const statusMsg = shadow.getElementById('statusMsg');
 
     const ctx = previewCanvas.getContext('2d', { willReadFrequently: true });
+    let livePageItems = [];
     let allImageRecords = [];
     let currentImgEl = null;
     let currentFilterMode = null;
     let browserCounter = 0;
+
+    currentSiteTag.textContent = `Web đang dùng: ${location.hostname} (${location.href})`;
 
     let isOpen = false;
     function setOpen(state) {
@@ -441,10 +518,118 @@
     });
 
     function setActiveButton(activeBtn) {
-        [btnGetImages, btnGray, btnBW, btnBits, btnMultiBrowser].forEach((b) => {
+        [btnFindOnCurrentSite, btnGetImages, btnGray, btnBW, btnBits, btnMultiBrowser].forEach((b) => {
             b.classList.toggle('active-mode', b === activeBtn);
         });
     }
+
+    // Quét các món / mục / liên kết thực tế đang hiển thị trên chính trang web hiện tại
+    function scanRealPageItems() {
+        const candidates = Array.from(document.querySelectorAll('a[href], article, li, [data-testid], h1, h2, h3, h4')).filter(
+            (el) => !root.contains(el)
+        );
+        const seen = new Set();
+        const items = [];
+
+        for (const el of candidates) {
+            const anchor = el.tagName === 'A' ? el : el.querySelector('a[href]');
+            const href = anchor && anchor.href && !anchor.href.startsWith('javascript:') ? anchor.href : location.href;
+
+            const title = (
+                (anchor && (anchor.innerText || anchor.textContent || anchor.getAttribute('aria-label'))) ||
+                el.innerText ||
+                el.textContent ||
+                ''
+            )
+                .replace(/\s+/g, ' ')
+                .trim();
+
+            if (!title || title.length < 2 || title.length > 100) continue;
+
+            const key = `${title}|${href}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            items.push({
+                title,
+                href,
+                searchable: `${title} ${href}`.toLowerCase(),
+                element: el
+            });
+        }
+
+        livePageItems = items.slice(0, 150);
+        renderFoundItems(livePageItems, itemSearchInput.value.trim());
+        statusMsg.textContent = `Đã quét ${livePageItems.length} mục thực tế trên ${location.hostname}.`;
+    }
+
+    function renderFoundItems(list, query = '') {
+        foundItemsList.innerHTML = '';
+        const q = query.toLowerCase();
+        const filtered = q ? list.filter((x) => x.searchable.includes(q)) : list;
+
+        if (!filtered.length) {
+            foundItemsList.innerHTML = `<div class="found-text">Không có mục nào khớp "${query}" trên trang hiện tại.</div>`;
+            return;
+        }
+
+        filtered.slice(0, 50).forEach((item) => {
+            const row = document.createElement('div');
+            row.className = 'found-item';
+
+            const txt = document.createElement('div');
+            txt.className = 'found-text';
+            txt.title = `${item.title} (${item.href})`;
+            txt.textContent = item.title;
+
+            const openBtn = document.createElement('button');
+            openBtn.className = 'found-open';
+            openBtn.textContent = 'Mở song song';
+            openBtn.addEventListener('click', () => {
+                browserPanel.classList.add('show');
+                createSubBrowser(item.href, item.title);
+                statusMsg.textContent = `Đang mở "${item.title}" trong trình duyệt song song.`;
+            });
+
+            row.appendChild(txt);
+            row.appendChild(openBtn);
+            foundItemsList.appendChild(row);
+        });
+    }
+
+    // Tìm đồ/từ khóa bám theo chính tên miền trang hiện tại (site:hostname từ khóa)
+    function searchOnCurrentSite() {
+        const q = itemSearchInput.value.trim();
+        if (!q) {
+            statusMsg.textContent = 'Hãy nhập tên đồ hoặc từ khóa cần tìm.';
+            return;
+        }
+        renderFoundItems(livePageItems, q);
+        const siteQueryUrl = `https://www.google.com/search?q=${encodeURIComponent(`site:${location.hostname} ${q}`)}&igu=1`;
+        browserPanel.classList.add('show');
+        createSubBrowser(siteQueryUrl, `${location.hostname}: ${q}`);
+        statusMsg.textContent = `Đang tìm "${q}" trên chính trang ${location.hostname}...`;
+    }
+
+    btnFindOnCurrentSite.addEventListener('click', () => {
+        setActiveButton(btnFindOnCurrentSite);
+        finderPanel.classList.add('show');
+        scanRealPageItems();
+    });
+
+    itemSearchBtn.addEventListener('click', () => {
+        if (!livePageItems.length) scanRealPageItems();
+        renderFoundItems(livePageItems, itemSearchInput.value.trim());
+        statusMsg.textContent = `Đã lọc trên trang hiện tại với từ khóa "${itemSearchInput.value.trim()}".`;
+    });
+
+    itemSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            searchOnCurrentSite();
+        }
+    });
+
+    itemSiteSearchBtn.addEventListener('click', searchOnCurrentSite);
 
     function getImageName(img, idx) {
         const src = img.currentSrc || img.src || '';
@@ -522,7 +707,7 @@
         });
 
         renderGallery(allImageRecords);
-        statusMsg.textContent = `Đã lấy ${allImageRecords.length} ảnh. Có thể gõ tên ảnh để lọc.`;
+        statusMsg.textContent = `Đã lấy ${allImageRecords.length} ảnh trên ${location.hostname}.`;
     });
 
     function filterImagesByName() {
@@ -532,7 +717,6 @@
         const q = imgSearchInput.value.trim().toLowerCase();
         if (!q) {
             renderGallery(allImageRecords);
-            statusMsg.textContent = `Hiển thị toàn bộ ${allImageRecords.length} ảnh.`;
             return;
         }
         const matched = allImageRecords.filter((r) => r.searchable.includes(q));
@@ -547,7 +731,6 @@
     imgResetBtn.addEventListener('click', () => {
         imgSearchInput.value = '';
         renderGallery(allImageRecords);
-        statusMsg.textContent = `Đã hiển thị lại ${allImageRecords.length} ảnh.`;
     });
 
     async function drawSourceToCanvas(imgEl) {
@@ -695,9 +878,10 @@
         statusMsg.textContent = `Đã xuất chuỗi bit (${cols}x${rows}).`;
     });
 
-    function resolveUrlOrSearch(rawInput) {
+    // Chuyển từ khóa thành link bám theo trang hiện tại (site:hostname) hoặc mở thẳng URL/tên miền
+    function resolveCurrentSiteQuery(rawInput) {
         const val = rawInput.trim();
-        if (!val) return null;
+        if (!val) return { url: location.href, mode: 'current' };
 
         if (/^https?:\/\//i.test(val)) {
             return { url: val, mode: 'link' };
@@ -709,8 +893,8 @@
         }
 
         return {
-            url: 'https://www.google.com/search?q=' + encodeURIComponent(val) + '&igu=1',
-            mode: 'search'
+            url: `https://www.google.com/search?q=${encodeURIComponent(`site:${location.hostname} ${val}`)}&igu=1`,
+            mode: 'site-search'
         };
     }
 
@@ -719,7 +903,7 @@
         browserCountLabel.textContent = `${count} trình duyệt`;
     }
 
-    function createSubBrowser(initialInput = 'hi') {
+    function createSubBrowser(initialInput = '', customTitle = '') {
         browserCounter += 1;
         const idNum = browserCounter;
 
@@ -730,7 +914,7 @@
         head.className = 'browser-card-head';
 
         const titleSpan = document.createElement('span');
-        titleSpan.textContent = `Trình duyệt #${idNum}`;
+        titleSpan.textContent = customTitle ? `Trình duyệt #${idNum} — ${customTitle.slice(0, 24)}` : `Trình duyệt #${idNum}`;
 
         const actions = document.createElement('div');
         actions.className = 'browser-card-actions';
@@ -755,7 +939,7 @@
         urlInput.className = 'input-box';
         urlInput.type = 'text';
         urlInput.value = initialInput;
-        urlInput.placeholder = 'Nhập từ khóa (vd: hi) hoặc link...';
+        urlInput.placeholder = `Tìm đồ/từ khóa trên ${location.hostname} hoặc dán link...`;
 
         const goBtn = document.createElement('button');
         goBtn.className = 'small-btn teal';
@@ -766,17 +950,16 @@
 
         const frame = document.createElement('iframe');
         frame.className = 'mini-frame';
-        const initResolved = resolveUrlOrSearch(initialInput);
-        frame.src = initResolved ? initResolved.url : 'https://www.google.com/search?q=hi&igu=1';
+        const initResolved = resolveCurrentSiteQuery(initialInput);
+        frame.src = initResolved.url;
         frame.setAttribute('referrerpolicy', 'no-referrer');
 
         function navigate() {
-            const resolved = resolveUrlOrSearch(urlInput.value);
-            if (!resolved) return;
+            const resolved = resolveCurrentSiteQuery(urlInput.value);
             frame.src = resolved.url;
             statusMsg.textContent =
-                resolved.mode === 'search'
-                    ? `Trình duyệt #${idNum} đang tìm kết quả cho "${urlInput.value.trim()}"...`
+                resolved.mode === 'site-search'
+                    ? `Trình duyệt #${idNum} đang tìm "${urlInput.value.trim()}" trên ${location.hostname}...`
                     : `Trình duyệt #${idNum} đang mở: ${resolved.url}`;
         }
 
@@ -809,15 +992,15 @@
         btnMultiBrowser.classList.toggle('active-mode', willShow);
 
         if (willShow && browserList.querySelectorAll('.browser-card').length === 0) {
-            createSubBrowser('hi');
+            createSubBrowser('', location.hostname);
         }
         statusMsg.textContent = willShow
-            ? 'Đã mở trình duyệt song song. Nhập "hi" hoặc từ khóa rồi bấm Tìm / Mở.'
+            ? `Đã mở trình duyệt song song theo trang ${location.hostname}.`
             : 'Đã thu gọn trình duyệt song song.';
     });
 
     addBrowserBtn.addEventListener('click', () => {
-        createSubBrowser('hi');
-        statusMsg.textContent = `Đã tạo thêm trình duyệt con (#${browserCounter}) chạy song song.`;
+        createSubBrowser('', location.hostname);
+        statusMsg.textContent = `Đã tạo thêm trình duyệt con (#${browserCounter}) bám theo ${location.hostname}.`;
     });
 })();
