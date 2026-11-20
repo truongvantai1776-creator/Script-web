@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - Search Image, Multi Browsers & Search by Name
+// @name         Universal UI - Direct Panel, Search Fix & Multi Browsers
 // @namespace    http://tampermonkey.net/
-// @version      7.1
-// @description  Tìm ảnh theo tên, phân tích trắng đen/bit và mở nhiều trình duyệt con tìm web bằng tên hoặc URL
+// @version      7.2
+// @description  Bỏ nút UI nổi, nhập từ khóa như "hi" mở thẳng kết quả tìm kiếm và chạy đa trình duyệt
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -17,85 +17,59 @@
     root.style.all = 'initial';
     root.style.position = 'fixed';
     root.style.zIndex = '2147483647';
-    root.style.top = '0';
-    root.style.left = '0';
-    root.style.width = '0';
-    root.style.height = '0';
+    root.style.bottom = '16px';
+    root.style.right = '16px';
     document.documentElement.appendChild(root);
 
     const shadow = root.attachShadow({ mode: 'open' });
 
     shadow.innerHTML = `
         <style>
-            .toggle-btn {
-                position: fixed;
-                bottom: 20px;
-                right: 20px;
-                width: 54px;
-                height: 54px;
-                border-radius: 50%;
-                border: none;
-                background: #18181b;
-                color: #ffffff;
-                font-size: 13px;
-                font-weight: 700;
-                font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-                cursor: pointer;
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.38);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                transition: transform 0.15s ease, background 0.15s ease;
-                user-select: none;
-                touch-action: none;
-            }
-            .toggle-btn:hover {
-                background: #27272a;
-                transform: scale(1.05);
-            }
             .main-ui {
-                position: fixed;
-                bottom: 84px;
-                right: 20px;
-                width: 380px;
-                max-width: calc(100vw - 32px);
-                max-height: calc(100vh - 108px);
+                width: 375px;
+                max-width: calc(100vw - 24px);
+                max-height: calc(100vh - 32px);
                 background: #111114;
                 color: #f4f4f5;
-                border: 1px solid rgba(255, 255, 255, 0.12);
+                border: 1px solid rgba(255, 255, 255, 0.14);
                 border-radius: 14px;
                 box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
                 font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-                display: none;
+                display: flex;
                 flex-direction: column;
                 overflow: hidden;
             }
-            .main-ui.open {
-                display: flex;
+            .main-ui.minimized .ui-body {
+                display: none;
             }
             .ui-header {
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 11px 14px;
+                padding: 10px 14px;
                 background: #18181c;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             }
             .ui-title {
-                font-size: 14px;
+                font-size: 13px;
                 font-weight: 700;
             }
-            .ui-close {
-                background: transparent;
-                border: none;
-                color: #a1a1aa;
-                font-size: 20px;
-                line-height: 1;
-                cursor: pointer;
-                padding: 2px 6px;
+            .header-btns {
+                display: flex;
+                gap: 6px;
             }
-            .ui-close:hover {
-                color: #ffffff;
+            .hdr-btn {
+                background: #27272a;
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                color: #f4f4f5;
+                font-size: 11px;
+                font-weight: 600;
+                border-radius: 6px;
+                padding: 4px 8px;
+                cursor: pointer;
+            }
+            .hdr-btn:hover {
+                background: #3f3f46;
             }
             .ui-body {
                 padding: 12px 14px;
@@ -310,12 +284,12 @@
             }
         </style>
 
-        <button class="toggle-btn" id="toggleBtn" title="Mở/Đóng UI">UI</button>
-
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">Tìm Ảnh Tên & Đa Trình Duyệt</span>
-                <button class="ui-close" id="closeBtn">&times;</button>
+                <span class="ui-title">Bảng Chức Năng & Đa Trình Duyệt</span>
+                <div class="header-btns">
+                    <button class="hdr-btn" id="minBtn">Thu gọn</button>
+                </div>
             </div>
             <div class="ui-body">
                 <div class="btn-grid">
@@ -360,9 +334,8 @@
         </div>
     `;
 
-    const toggleBtn = shadow.getElementById('toggleBtn');
     const mainUi = shadow.getElementById('mainUi');
-    const closeBtn = shadow.getElementById('closeBtn');
+    const minBtn = shadow.getElementById('minBtn');
 
     const btnGetImages = shadow.getElementById('btnGetImages');
     const btnGray = shadow.getElementById('btnGray');
@@ -393,57 +366,16 @@
     let currentFilterMode = null;
     let browserCounter = 0;
 
+    minBtn.addEventListener('click', () => {
+        const isMin = mainUi.classList.toggle('minimized');
+        minBtn.textContent = isMin ? 'Mở rộng' : 'Thu gọn';
+    });
+
     function setActiveButton(activeBtn) {
         [btnGetImages, btnGray, btnBW, btnBits, btnMultiBrowser].forEach((b) => {
             b.classList.toggle('active-mode', b === activeBtn);
         });
     }
-
-    let isOpen = false;
-    function setOpen(state) {
-        isOpen = state;
-        mainUi.classList.toggle('open', isOpen);
-    }
-
-    closeBtn.addEventListener('click', () => setOpen(false));
-
-    let dragging = false;
-    let moved = false;
-    let startX = 0;
-    let startY = 0;
-    let origRight = 20;
-    let origBottom = 20;
-
-    toggleBtn.addEventListener('pointerdown', (e) => {
-        dragging = true;
-        moved = false;
-        startX = e.clientX;
-        startY = e.clientY;
-        origRight = parseInt(toggleBtn.style.right || '20', 10);
-        origBottom = parseInt(toggleBtn.style.bottom || '20', 10);
-        toggleBtn.setPointerCapture(e.pointerId);
-    });
-
-    toggleBtn.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) moved = true;
-        if (!moved) return;
-
-        const nextRight = Math.max(8, Math.min(window.innerWidth - 60, origRight - dx));
-        const nextBottom = Math.max(8, Math.min(window.innerHeight - 60, origBottom - dy));
-        toggleBtn.style.right = nextRight + 'px';
-        toggleBtn.style.bottom = nextBottom + 'px';
-    });
-
-    toggleBtn.addEventListener('pointerup', () => {
-        if (!dragging) return;
-        dragging = false;
-        if (!moved) {
-            setOpen(!isOpen);
-        }
-    });
 
     function getImageName(img, idx) {
         const src = img.currentSrc || img.src || '';
@@ -694,17 +626,23 @@
         statusMsg.textContent = `Đã xuất chuỗi bit (${cols}x${rows}).`;
     });
 
+    // Chỉ mở trực tiếp khi có http(s):// hoặc đúng dạng tên miền có dấu chấm (vd: example.com)
+    // Còn lại như "hi" sẽ mở kết quả tìm kiếm "hi"
     function resolveUrlOrSearch(rawInput) {
         const val = rawInput.trim();
         if (!val) return null;
+
         if (/^https?:\/\//i.test(val)) {
             return { url: val, mode: 'link' };
         }
-        if (!/\s/.test(val) && /^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(val)) {
+
+        const domainRegex = /^(?:[a-z0-9-]+\.)+(?:com|net|org|vn|io|ai|co|edu|gov|tv|me|gg|dev|app|xyz|info|biz)(?:[/?#].*)?$/i;
+        if (!/\s/.test(val) && domainRegex.test(val)) {
             return { url: 'https://' + val, mode: 'domain' };
         }
+
         return {
-            url: 'https://duckduckgo.com/?q=' + encodeURIComponent(val),
+            url: 'https://www.google.com/search?q=' + encodeURIComponent(val) + '&igu=1',
             mode: 'search'
         };
     }
@@ -714,7 +652,7 @@
         browserCountLabel.textContent = `${count} trình duyệt`;
     }
 
-    function createSubBrowser(initialInput = 'https://example.com') {
+    function createSubBrowser(initialInput = 'hi') {
         browserCounter += 1;
         const idNum = browserCounter;
 
@@ -750,11 +688,11 @@
         urlInput.className = 'input-box';
         urlInput.type = 'text';
         urlInput.value = initialInput;
-        urlInput.placeholder = 'Nhập tên web/từ khóa hoặc link...';
+        urlInput.placeholder = 'Nhập từ khóa (vd: hi) hoặc link...';
 
         const goBtn = document.createElement('button');
         goBtn.className = 'small-btn teal';
-        goBtn.textContent = 'Đi / Tìm';
+        goBtn.textContent = 'Tìm / Mở';
 
         bar.appendChild(urlInput);
         bar.appendChild(goBtn);
@@ -762,7 +700,7 @@
         const frame = document.createElement('iframe');
         frame.className = 'mini-frame';
         const initResolved = resolveUrlOrSearch(initialInput);
-        frame.src = initResolved ? initResolved.url : 'https://example.com';
+        frame.src = initResolved ? initResolved.url : 'https://www.google.com/search?q=hi&igu=1';
         frame.setAttribute('referrerpolicy', 'no-referrer');
 
         function navigate() {
@@ -771,7 +709,7 @@
             frame.src = resolved.url;
             statusMsg.textContent =
                 resolved.mode === 'search'
-                    ? `Trình duyệt #${idNum} đang tìm tên "${urlInput.value.trim()}"...`
+                    ? `Trình duyệt #${idNum} đang tìm kết quả cho "${urlInput.value.trim()}"...`
                     : `Trình duyệt #${idNum} đang mở: ${resolved.url}`;
         }
 
@@ -804,15 +742,15 @@
         btnMultiBrowser.classList.toggle('active-mode', willShow);
 
         if (willShow && browserList.querySelectorAll('.browser-card').length === 0) {
-            createSubBrowser('https://example.com');
+            createSubBrowser('hi');
         }
         statusMsg.textContent = willShow
-            ? 'Đã mở trình duyệt song song. Nhập tên/từ khóa hoặc link rồi bấm Đi / Tìm.'
+            ? 'Đã mở trình duyệt song song. Nhập "hi" hoặc từ khóa rồi bấm Tìm / Mở.'
             : 'Đã thu gọn trình duyệt song song.';
     });
 
     addBrowserBtn.addEventListener('click', () => {
-        createSubBrowser('https://example.com');
+        createSubBrowser('hi');
         statusMsg.textContent = `Đã tạo thêm trình duyệt con (#${browserCounter}) chạy song song.`;
     });
 })();
