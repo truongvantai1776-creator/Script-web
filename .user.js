@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - Separate Buttons & Parallel Mini Browser (Safari)
+// @name         Universal UI - Search Image by Name & Multi Parallel Browsers
 // @namespace    http://tampermonkey.net/
-// @version      6.0
-// @description  Tách riêng từng nút chức năng và thêm trình duyệt con chạy song song trong UI
+// @version      7.0
+// @description  Tìm ảnh theo tên, phân tích trắng đen/bit và mở nhiều trình duyệt con song song trên Safari
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -57,7 +57,7 @@
                 position: fixed;
                 bottom: 84px;
                 right: 20px;
-                width: 375px;
+                width: 380px;
                 max-width: calc(100vw - 32px);
                 max-height: calc(100vh - 108px);
                 background: #111114;
@@ -156,14 +156,45 @@
                 text-transform: uppercase;
                 letter-spacing: 0.04em;
             }
+            .search-row, .url-bar {
+                display: flex;
+                gap: 6px;
+            }
+            .input-box {
+                flex: 1;
+                min-width: 0;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                background: #18181c;
+                color: #f4f4f5;
+                font-size: 12px;
+                padding: 7px 9px;
+                outline: none;
+            }
+            .small-btn {
+                padding: 7px 10px;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                background: #27272a;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .small-btn.teal {
+                border-color: #2dd4bf;
+                background: #0f766e;
+            }
             .gallery {
                 display: grid;
                 grid-template-columns: repeat(4, 1fr);
                 gap: 6px;
-                max-height: 130px;
+                max-height: 145px;
                 overflow-y: auto;
             }
             .thumb-item {
+                position: relative;
                 aspect-ratio: 1 / 1;
                 border-radius: 6px;
                 overflow: hidden;
@@ -181,49 +212,75 @@
                 object-fit: cover;
                 display: block;
             }
+            .thumb-name {
+                position: absolute;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.72);
+                color: #f4f4f5;
+                font-size: 9px;
+                padding: 2px 3px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
             .preview-canvas {
                 max-width: 100%;
-                max-height: 140px;
+                max-height: 135px;
                 border-radius: 6px;
                 background: #18181c;
                 align-self: center;
             }
-            .url-bar {
+            .browser-list {
                 display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .browser-card {
+                border: 1px solid rgba(45, 212, 191, 0.35);
+                background: #121617;
+                border-radius: 9px;
+                padding: 8px;
+                display: flex;
+                flex-direction: column;
                 gap: 6px;
             }
-            .url-input {
-                flex: 1;
-                min-width: 0;
-                border-radius: 8px;
-                border: 1px solid rgba(255, 255, 255, 0.16);
-                background: #18181c;
-                color: #f4f4f5;
-                font-size: 12px;
-                padding: 7px 9px;
-                outline: none;
+            .browser-card-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                font-size: 11px;
+                font-weight: 700;
+                color: #5eead4;
             }
-            .go-btn {
-                padding: 7px 11px;
-                border-radius: 8px;
-                border: 1px solid #2dd4bf;
-                background: #0f766e;
-                color: #ffffff;
-                font-size: 12px;
-                font-weight: 600;
+            .browser-card-actions {
+                display: flex;
+                gap: 5px;
+            }
+            .mini-act-btn {
+                padding: 3px 7px;
+                border-radius: 6px;
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                background: #27272a;
+                color: #f4f4f5;
+                font-size: 11px;
                 cursor: pointer;
             }
             .mini-frame {
                 width: 100%;
-                height: 260px;
+                height: 220px;
                 border: 1px solid rgba(255, 255, 255, 0.14);
                 border-radius: 8px;
                 background: #ffffff;
             }
+            .mini-frame.collapsed {
+                display: none;
+            }
             .data-box {
                 width: 100%;
-                min-height: 105px;
-                max-height: 170px;
+                min-height: 95px;
+                max-height: 160px;
                 box-sizing: border-box;
                 border-radius: 8px;
                 border: 1px solid rgba(255, 255, 255, 0.12);
@@ -257,7 +314,7 @@
 
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">Bảng Nút & Trình Duyệt Song Song</span>
+                <span class="ui-title">Tìm Ảnh Tên & Đa Trình Duyệt</span>
                 <button class="ui-close" id="closeBtn">&times;</button>
             </div>
             <div class="ui-body">
@@ -266,12 +323,17 @@
                     <button class="ui-btn" id="btnGray">2. Trắng đen (Xám)</button>
                     <button class="ui-btn" id="btnBW">3. Đen & Trắng</button>
                     <button class="ui-btn" id="btnBits">4. Xuất chuỗi Bit</button>
-                    <button class="ui-btn browser-btn" id="btnMiniBrowser">5. Trình duyệt trong trình duyệt (Chạy song song)</button>
+                    <button class="ui-btn browser-btn" id="btnMultiBrowser">5. Trình duyệt song song (Mở / Thêm nhiều)</button>
                 </div>
 
-                <!-- Khu vực ảnh & phân tích -->
+                <!-- Khu vực ảnh + tìm bằng tên -->
                 <div class="panel" id="imagePanel">
-                    <div class="section-label">Chọn 1 ảnh trên trang</div>
+                    <div class="section-label">Tìm ảnh theo tên & chọn 1 ảnh</div>
+                    <div class="search-row">
+                        <input class="input-box" type="text" id="imgSearchInput" placeholder="Nhập tên ảnh / từ khóa (alt, tên file)..." />
+                        <button class="small-btn" id="imgSearchBtn">Tìm</button>
+                        <button class="small-btn" id="imgResetBtn">Tất cả</button>
+                    </div>
                     <div class="gallery" id="gallery"></div>
                     <canvas class="preview-canvas" id="previewCanvas"></canvas>
                     <div class="threshold-row">
@@ -281,17 +343,16 @@
                     <input type="range" id="thresholdSlider" min="0" max="255" value="128" />
                 </div>
 
-                <!-- Khu vực trình duyệt con chạy song song -->
+                <!-- Khu vực nhiều trình duyệt con chạy song song -->
                 <div class="panel" id="browserPanel">
-                    <div class="section-label">Trình duyệt song song (Safari)</div>
                     <div class="url-bar">
-                        <input class="url-input" type="url" id="subUrlInput" value="https://example.com" placeholder="Nhập địa chỉ web (https://...)" />
-                        <button class="go-btn" id="subGoBtn">Mở</button>
+                        <button class="small-btn teal" id="addBrowserBtn">+ Thêm trình duyệt</button>
+                        <span class="section-label" style="align-self:center;" id="browserCountLabel">0 trình duyệt</span>
                     </div>
-                    <iframe class="mini-frame" id="subBrowserFrame" src="https://example.com" referrerpolicy="no-referrer"></iframe>
+                    <div class="browser-list" id="browserList"></div>
                 </div>
 
-                <!-- Khu vực hiển thị kết quả bit/thông tin -->
+                <!-- Khu vực kết quả -->
                 <div class="panel show" id="resultPanel">
                     <div class="section-label">Kết quả / Chuỗi Bit</div>
                     <textarea class="data-box" id="resultBox" placeholder="Bấm các nút phía trên để sử dụng..."></textarea>
@@ -310,28 +371,33 @@
     const btnGray = shadow.getElementById('btnGray');
     const btnBW = shadow.getElementById('btnBW');
     const btnBits = shadow.getElementById('btnBits');
-    const btnMiniBrowser = shadow.getElementById('btnMiniBrowser');
+    const btnMultiBrowser = shadow.getElementById('btnMultiBrowser');
 
     const imagePanel = shadow.getElementById('imagePanel');
-    const browserPanel = shadow.getElementById('browserPanel');
+    const imgSearchInput = shadow.getElementById('imgSearchInput');
+    const imgSearchBtn = shadow.getElementById('imgSearchBtn');
+    const imgResetBtn = shadow.getElementById('imgResetBtn');
     const gallery = shadow.getElementById('gallery');
     const previewCanvas = shadow.getElementById('previewCanvas');
     const thresholdSlider = shadow.getElementById('thresholdSlider');
     const thresholdVal = shadow.getElementById('thresholdVal');
 
-    const subUrlInput = shadow.getElementById('subUrlInput');
-    const subGoBtn = shadow.getElementById('subGoBtn');
-    const subBrowserFrame = shadow.getElementById('subBrowserFrame');
+    const browserPanel = shadow.getElementById('browserPanel');
+    const addBrowserBtn = shadow.getElementById('addBrowserBtn');
+    const browserCountLabel = shadow.getElementById('browserCountLabel');
+    const browserList = shadow.getElementById('browserList');
 
     const resultBox = shadow.getElementById('resultBox');
     const statusMsg = shadow.getElementById('statusMsg');
 
     const ctx = previewCanvas.getContext('2d', { willReadFrequently: true });
+    let allImageRecords = [];
     let currentImgEl = null;
     let currentFilterMode = null;
+    let browserCounter = 0;
 
     function setActiveButton(activeBtn) {
-        [btnGetImages, btnGray, btnBW, btnBits, btnMiniBrowser].forEach((b) => {
+        [btnGetImages, btnGray, btnBW, btnBits, btnMultiBrowser].forEach((b) => {
             b.classList.toggle('active-mode', b === activeBtn);
         });
     }
@@ -383,6 +449,113 @@
         }
     });
 
+    // Lấy tên gợi nhớ của ảnh (alt, title, tên file hoặc từ khóa xung quanh)
+    function getImageName(img, idx) {
+        const src = img.currentSrc || img.src || '';
+        let filePart = '';
+        try {
+            const cleanUrl = src.split('?')[0].split('#')[0];
+            filePart = decodeURIComponent(cleanUrl.split('/').pop() || '');
+        } catch (_) {
+            filePart = src.split('/').pop() || '';
+        }
+        const alt = (img.alt || '').trim();
+        const title = (img.title || '').trim();
+        const aria = (img.getAttribute('aria-label') || '').trim();
+        const displayName = alt || title || aria || filePart || `Anh-${idx + 1}`;
+        const searchable = `${alt} ${title} ${aria} ${filePart} ${src}`.toLowerCase();
+        return { displayName, searchable };
+    }
+
+    function renderGallery(records) {
+        gallery.innerHTML = '';
+        if (!records.length) {
+            statusMsg.textContent = 'Không có ảnh nào khớp tên tìm kiếm.';
+            return;
+        }
+
+        records.forEach((rec) => {
+            const btn = document.createElement('button');
+            btn.className = 'thumb-item';
+            if (currentImgEl === rec.img) btn.classList.add('active');
+            btn.title = rec.displayName;
+
+            const thumb = document.createElement('img');
+            thumb.src = rec.src;
+            thumb.alt = rec.displayName;
+
+            const badge = document.createElement('span');
+            badge.className = 'thumb-name';
+            badge.textContent = rec.displayName;
+
+            btn.appendChild(thumb);
+            btn.appendChild(badge);
+
+            btn.addEventListener('click', async () => {
+                gallery.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('active'));
+                btn.classList.add('active');
+                currentImgEl = rec.img;
+                currentFilterMode = null;
+                const ok = await drawSourceToCanvas(rec.img);
+                statusMsg.textContent = ok
+                    ? `Đã chọn "${rec.displayName}". Chọn Trắng đen, Đen & Trắng hoặc Xuất chuỗi Bit.`
+                    : `Ảnh "${rec.displayName}" bị chặn CORS.`;
+            });
+
+            gallery.appendChild(btn);
+        });
+    }
+
+    // Nút 1: Lấy tất cả ảnh
+    btnGetImages.addEventListener('click', () => {
+        setActiveButton(btnGetImages);
+        imagePanel.classList.add('show');
+
+        const imgs = Array.from(document.querySelectorAll('img')).filter((img) => {
+            if (root.contains(img)) return false;
+            return Boolean(img.currentSrc || img.src);
+        });
+
+        allImageRecords = imgs.map((img, idx) => {
+            const meta = getImageName(img, idx);
+            return {
+                img,
+                src: img.currentSrc || img.src,
+                displayName: meta.displayName,
+                searchable: meta.searchable
+            };
+        });
+
+        renderGallery(allImageRecords);
+        statusMsg.textContent = `Đã lấy ${allImageRecords.length} ảnh. Có thể gõ tên ảnh để lọc.`;
+    });
+
+    // Tìm ảnh bằng tên
+    function filterImagesByName() {
+        if (!allImageRecords.length) {
+            btnGetImages.click();
+        }
+        const q = imgSearchInput.value.trim().toLowerCase();
+        if (!q) {
+            renderGallery(allImageRecords);
+            statusMsg.textContent = `Hiển thị toàn bộ ${allImageRecords.length} ảnh.`;
+            return;
+        }
+        const matched = allImageRecords.filter((r) => r.searchable.includes(q));
+        renderGallery(matched);
+        statusMsg.textContent = `Tìm thấy ${matched.length} ảnh khớp "${imgSearchInput.value.trim()}".`;
+    }
+
+    imgSearchBtn.addEventListener('click', filterImagesByName);
+    imgSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') filterImagesByName();
+    });
+    imgResetBtn.addEventListener('click', () => {
+        imgSearchInput.value = '';
+        renderGallery(allImageRecords);
+        statusMsg.textContent = `Đã hiển thị lại ${allImageRecords.length} ảnh.`;
+    });
+
     async function drawSourceToCanvas(imgEl) {
         const draw = (srcImg) => {
             const w = srcImg.naturalWidth || srcImg.width;
@@ -420,51 +593,10 @@
         }
     }
 
-    // Nút 1: Lấy tất cả ảnh
-    btnGetImages.addEventListener('click', () => {
-        setActiveButton(btnGetImages);
-        imagePanel.classList.add('show');
-        gallery.innerHTML = '';
-
-        const imgs = Array.from(document.querySelectorAll('img')).filter((img) => {
-            if (root.contains(img)) return false;
-            return Boolean(img.currentSrc || img.src);
-        });
-
-        if (!imgs.length) {
-            statusMsg.textContent = 'Không tìm thấy ảnh nào trên trang này.';
-            return;
-        }
-
-        imgs.forEach((img, idx) => {
-            const btn = document.createElement('button');
-            btn.className = 'thumb-item';
-            const thumb = document.createElement('img');
-            thumb.src = img.currentSrc || img.src;
-            thumb.alt = `Ảnh ${idx + 1}`;
-            btn.appendChild(thumb);
-
-            btn.addEventListener('click', async () => {
-                gallery.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('active'));
-                btn.classList.add('active');
-                currentImgEl = img;
-                currentFilterMode = null;
-                const ok = await drawSourceToCanvas(img);
-                statusMsg.textContent = ok
-                    ? `Đã chọn Ảnh #${idx + 1}. Bấm nút Trắng đen, Đen & Trắng hoặc Xuất chuỗi Bit.`
-                    : `Ảnh #${idx + 1} bị chặn CORS, hãy thử ảnh khác.`;
-            });
-
-            gallery.appendChild(btn);
-        });
-
-        statusMsg.textContent = `Đã lấy ${imgs.length} ảnh. Chạm vào 1 ảnh để chọn.`;
-    });
-
     async function runGrayOrBW(mode) {
         if (!currentImgEl) {
             imagePanel.classList.add('show');
-            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chạm vào 1 ảnh trước.';
+            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chọn 1 ảnh trước.';
             return;
         }
 
@@ -507,17 +639,15 @@
             `Ngưỡng: ${threshold}\n` +
             `Sáng/Trắng: ${lightCount} (${((lightCount / total) * 100).toFixed(1)}%)\n` +
             `Tối/Đen: ${darkCount} (${((darkCount / total) * 100).toFixed(1)}%)`;
-        statusMsg.textContent = `Đã xử lý ${mode === 'gray' ? 'trắng đen (xám)' : 'đen & trắng'}.`;
+        statusMsg.textContent = `Đã chuyển sang ${mode === 'gray' ? 'trắng đen (xám)' : 'đen & trắng'}.`;
     }
 
-    // Nút 2: Trắng đen (Xám)
     btnGray.addEventListener('click', () => {
         setActiveButton(btnGray);
         imagePanel.classList.add('show');
         runGrayOrBW('gray');
     });
 
-    // Nút 3: Đen & Trắng
     btnBW.addEventListener('click', () => {
         setActiveButton(btnBW);
         imagePanel.classList.add('show');
@@ -531,12 +661,11 @@
         }
     });
 
-    // Nút 4: Xuất chuỗi Bit
     btnBits.addEventListener('click', async () => {
         setActiveButton(btnBits);
         if (!currentImgEl) {
             imagePanel.classList.add('show');
-            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chạm vào 1 ảnh trước.';
+            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chọn 1 ảnh trước.';
             return;
         }
 
@@ -572,29 +701,109 @@
         statusMsg.textContent = `Đã xuất chuỗi bit (${cols}x${rows}).`;
     });
 
-    // Nút 5: Bật/tắt trình duyệt con chạy song song trong UI
-    btnMiniBrowser.addEventListener('click', () => {
-        const willShow = !browserPanel.classList.contains('show');
-        browserPanel.classList.toggle('show', willShow);
-        btnMiniBrowser.classList.toggle('active-mode', willShow);
-        statusMsg.textContent = willShow
-            ? 'Đã mở trình duyệt con chạy song song với trang Safari chính.'
-            : 'Đã thu gọn trình duyệt con.';
-    });
-
-    function navigateMiniBrowser() {
-        let raw = subUrlInput.value.trim();
-        if (!raw) return;
-        if (!/^https?:\/\//i.test(raw)) {
-            raw = 'https://' + raw;
-        }
-        subUrlInput.value = raw;
-        subBrowserFrame.src = raw;
-        statusMsg.textContent = 'Đang tải trang trong trình duyệt con: ' + raw;
+    // Tạo thêm nhiều trình duyệt con chạy song song
+    function updateBrowserCount() {
+        const count = browserList.querySelectorAll('.browser-card').length;
+        browserCountLabel.textContent = `${count} trình duyệt`;
     }
 
-    subGoBtn.addEventListener('click', navigateMiniBrowser);
-    subUrlInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') navigateMiniBrowser();
+    function createSubBrowser(initialUrl = 'https://example.com') {
+        browserCounter += 1;
+        const idNum = browserCounter;
+
+        const card = document.createElement('div');
+        card.className = 'browser-card';
+
+        const head = document.createElement('div');
+        head.className = 'browser-card-head';
+
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = `Trình duyệt #${idNum}`;
+
+        const actions = document.createElement('div');
+        actions.className = 'browser-card-actions';
+
+        const toggleCollapseBtn = document.createElement('button');
+        toggleCollapseBtn.className = 'mini-act-btn';
+        toggleCollapseBtn.textContent = 'Thu gọn';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'mini-act-btn';
+        removeBtn.textContent = 'Xóa';
+
+        actions.appendChild(toggleCollapseBtn);
+        actions.appendChild(removeBtn);
+        head.appendChild(titleSpan);
+        head.appendChild(actions);
+
+        const bar = document.createElement('div');
+        bar.className = 'url-bar';
+
+        const urlInput = document.createElement('input');
+        urlInput.className = 'input-box';
+        urlInput.type = 'url';
+        urlInput.value = initialUrl;
+        urlInput.placeholder = 'Nhập URL (ví dụ https://example.com)...';
+
+        const goBtn = document.createElement('button');
+        goBtn.className = 'small-btn teal';
+        goBtn.textContent = 'Mở';
+
+        bar.appendChild(urlInput);
+        bar.appendChild(goBtn);
+
+        const frame = document.createElement('iframe');
+        frame.className = 'mini-frame';
+        frame.src = initialUrl;
+        frame.setAttribute('referrerpolicy', 'no-referrer');
+
+        function navigate() {
+            let raw = urlInput.value.trim();
+            if (!raw) return;
+            if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+            urlInput.value = raw;
+            frame.src = raw;
+            statusMsg.textContent = `Trình duyệt #${idNum} đang mở: ${raw}`;
+        }
+
+        goBtn.addEventListener('click', navigate);
+        urlInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') navigate();
+        });
+
+        toggleCollapseBtn.addEventListener('click', () => {
+            const collapsed = frame.classList.toggle('collapsed');
+            toggleCollapseBtn.textContent = collapsed ? 'Mở lại' : 'Thu gọn';
+        });
+
+        removeBtn.addEventListener('click', () => {
+            card.remove();
+            updateBrowserCount();
+            statusMsg.textContent = `Đã xóa Trình duyệt #${idNum}.`;
+        });
+
+        card.appendChild(head);
+        card.appendChild(bar);
+        card.appendChild(frame);
+        browserList.appendChild(card);
+        updateBrowserCount();
+    }
+
+    btnMultiBrowser.addEventListener('click', () => {
+        const willShow = !browserPanel.classList.contains('show');
+        browserPanel.classList.toggle('show', willShow);
+        btnMultiBrowser.classList.toggle('active-mode', willShow);
+
+        if (willShow && browserList.querySelectorAll('.browser-card').length === 0) {
+            createSubBrowser('https://example.com');
+        }
+        statusMsg.textContent = willShow
+            ? 'Đã mở khu vực trình duyệt song song. Bấm "+ Thêm trình duyệt" để tạo thêm.'
+            : 'Đã thu gọn khu vực trình duyệt song song.';
+    });
+
+    addBrowserBtn.addEventListener('click', () => {
+        createSubBrowser('https://example.com');
+        statusMsg.textContent = `Đã tạo thêm trình duyệt con (#${browserCounter}) chạy song song.`;
     });
 })();
