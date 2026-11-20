@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - Search Image by Name & Multi Parallel Browsers
+// @name         Universal UI - Search Image, Multi Browsers & Search by Name
 // @namespace    http://tampermonkey.net/
-// @version      7.0
-// @description  Tìm ảnh theo tên, phân tích trắng đen/bit và mở nhiều trình duyệt con song song trên Safari
+// @version      7.1
+// @description  Tìm ảnh theo tên, phân tích trắng đen/bit và mở nhiều trình duyệt con tìm web bằng tên hoặc URL
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -326,7 +326,6 @@
                     <button class="ui-btn browser-btn" id="btnMultiBrowser">5. Trình duyệt song song (Mở / Thêm nhiều)</button>
                 </div>
 
-                <!-- Khu vực ảnh + tìm bằng tên -->
                 <div class="panel" id="imagePanel">
                     <div class="section-label">Tìm ảnh theo tên & chọn 1 ảnh</div>
                     <div class="search-row">
@@ -343,7 +342,6 @@
                     <input type="range" id="thresholdSlider" min="0" max="255" value="128" />
                 </div>
 
-                <!-- Khu vực nhiều trình duyệt con chạy song song -->
                 <div class="panel" id="browserPanel">
                     <div class="url-bar">
                         <button class="small-btn teal" id="addBrowserBtn">+ Thêm trình duyệt</button>
@@ -352,7 +350,6 @@
                     <div class="browser-list" id="browserList"></div>
                 </div>
 
-                <!-- Khu vực kết quả -->
                 <div class="panel show" id="resultPanel">
                     <div class="section-label">Kết quả / Chuỗi Bit</div>
                     <textarea class="data-box" id="resultBox" placeholder="Bấm các nút phía trên để sử dụng..."></textarea>
@@ -410,7 +407,6 @@
 
     closeBtn.addEventListener('click', () => setOpen(false));
 
-    // Kéo thả nút mở UI + bấm để mở/đóng
     let dragging = false;
     let moved = false;
     let startX = 0;
@@ -449,7 +445,6 @@
         }
     });
 
-    // Lấy tên gợi nhớ của ảnh (alt, title, tên file hoặc từ khóa xung quanh)
     function getImageName(img, idx) {
         const src = img.currentSrc || img.src || '';
         let filePart = '';
@@ -506,7 +501,6 @@
         });
     }
 
-    // Nút 1: Lấy tất cả ảnh
     btnGetImages.addEventListener('click', () => {
         setActiveButton(btnGetImages);
         imagePanel.classList.add('show');
@@ -530,7 +524,6 @@
         statusMsg.textContent = `Đã lấy ${allImageRecords.length} ảnh. Có thể gõ tên ảnh để lọc.`;
     });
 
-    // Tìm ảnh bằng tên
     function filterImagesByName() {
         if (!allImageRecords.length) {
             btnGetImages.click();
@@ -701,13 +694,27 @@
         statusMsg.textContent = `Đã xuất chuỗi bit (${cols}x${rows}).`;
     });
 
-    // Tạo thêm nhiều trình duyệt con chạy song song
+    function resolveUrlOrSearch(rawInput) {
+        const val = rawInput.trim();
+        if (!val) return null;
+        if (/^https?:\/\//i.test(val)) {
+            return { url: val, mode: 'link' };
+        }
+        if (!/\s/.test(val) && /^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(val)) {
+            return { url: 'https://' + val, mode: 'domain' };
+        }
+        return {
+            url: 'https://duckduckgo.com/?q=' + encodeURIComponent(val),
+            mode: 'search'
+        };
+    }
+
     function updateBrowserCount() {
         const count = browserList.querySelectorAll('.browser-card').length;
         browserCountLabel.textContent = `${count} trình duyệt`;
     }
 
-    function createSubBrowser(initialUrl = 'https://example.com') {
+    function createSubBrowser(initialInput = 'https://example.com') {
         browserCounter += 1;
         const idNum = browserCounter;
 
@@ -741,29 +748,31 @@
 
         const urlInput = document.createElement('input');
         urlInput.className = 'input-box';
-        urlInput.type = 'url';
-        urlInput.value = initialUrl;
-        urlInput.placeholder = 'Nhập URL (ví dụ https://example.com)...';
+        urlInput.type = 'text';
+        urlInput.value = initialInput;
+        urlInput.placeholder = 'Nhập tên web/từ khóa hoặc link...';
 
         const goBtn = document.createElement('button');
         goBtn.className = 'small-btn teal';
-        goBtn.textContent = 'Mở';
+        goBtn.textContent = 'Đi / Tìm';
 
         bar.appendChild(urlInput);
         bar.appendChild(goBtn);
 
         const frame = document.createElement('iframe');
         frame.className = 'mini-frame';
-        frame.src = initialUrl;
+        const initResolved = resolveUrlOrSearch(initialInput);
+        frame.src = initResolved ? initResolved.url : 'https://example.com';
         frame.setAttribute('referrerpolicy', 'no-referrer');
 
         function navigate() {
-            let raw = urlInput.value.trim();
-            if (!raw) return;
-            if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
-            urlInput.value = raw;
-            frame.src = raw;
-            statusMsg.textContent = `Trình duyệt #${idNum} đang mở: ${raw}`;
+            const resolved = resolveUrlOrSearch(urlInput.value);
+            if (!resolved) return;
+            frame.src = resolved.url;
+            statusMsg.textContent =
+                resolved.mode === 'search'
+                    ? `Trình duyệt #${idNum} đang tìm tên "${urlInput.value.trim()}"...`
+                    : `Trình duyệt #${idNum} đang mở: ${resolved.url}`;
         }
 
         goBtn.addEventListener('click', navigate);
@@ -798,8 +807,8 @@
             createSubBrowser('https://example.com');
         }
         statusMsg.textContent = willShow
-            ? 'Đã mở khu vực trình duyệt song song. Bấm "+ Thêm trình duyệt" để tạo thêm.'
-            : 'Đã thu gọn khu vực trình duyệt song song.';
+            ? 'Đã mở trình duyệt song song. Nhập tên/từ khóa hoặc link rồi bấm Đi / Tìm.'
+            : 'Đã thu gọn trình duyệt song song.';
     });
 
     addBrowserBtn.addEventListener('click', () => {
