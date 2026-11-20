@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - All Images & Bit/BW Analyzer (No API)
+// @name         Universal UI - Separate Buttons & Parallel Mini Browser (Safari)
 // @namespace    http://tampermonkey.net/
-// @version      5.0
-// @description  Lấy toàn bộ ảnh trên trang vào UI, chọn 1 ảnh và phân tích trắng đen / bit không cần API
+// @version      6.0
+// @description  Tách riêng từng nút chức năng và thêm trình duyệt con chạy song song trong UI
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -31,17 +31,17 @@
                 position: fixed;
                 bottom: 20px;
                 right: 20px;
-                width: 52px;
-                height: 52px;
+                width: 54px;
+                height: 54px;
                 border-radius: 50%;
                 border: none;
                 background: #18181b;
                 color: #ffffff;
                 font-size: 13px;
                 font-weight: 700;
-                font-family: system-ui, -apple-system, sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
                 cursor: pointer;
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.38);
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -57,15 +57,15 @@
                 position: fixed;
                 bottom: 84px;
                 right: 20px;
-                width: 370px;
+                width: 375px;
                 max-width: calc(100vw - 32px);
-                max-height: calc(100vh - 110px);
+                max-height: calc(100vh - 108px);
                 background: #111114;
                 color: #f4f4f5;
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 14px;
-                box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
-                font-family: system-ui, -apple-system, sans-serif;
+                box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+                font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
                 display: none;
                 flex-direction: column;
                 overflow: hidden;
@@ -77,7 +77,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 12px 14px;
+                padding: 11px 14px;
                 background: #18181c;
                 border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             }
@@ -89,7 +89,7 @@
                 background: transparent;
                 border: none;
                 color: #a1a1aa;
-                font-size: 18px;
+                font-size: 20px;
                 line-height: 1;
                 cursor: pointer;
                 padding: 2px 6px;
@@ -101,34 +101,53 @@
                 padding: 12px 14px;
                 display: flex;
                 flex-direction: column;
-                gap: 9px;
+                gap: 10px;
                 overflow-y: auto;
+                -webkit-overflow-scrolling: touch;
             }
-            .row {
-                display: flex;
+            .btn-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
                 gap: 8px;
-                align-items: center;
             }
             .ui-btn {
-                flex: 1;
-                padding: 8px 10px;
-                border-radius: 8px;
+                padding: 9px 10px;
+                border-radius: 9px;
                 border: 1px solid rgba(255, 255, 255, 0.14);
                 background: #27272a;
                 color: #ffffff;
                 font-size: 12px;
                 font-weight: 600;
                 cursor: pointer;
+                text-align: center;
             }
             .ui-btn:hover {
                 background: #3f3f46;
             }
-            .ui-btn.primary {
+            .ui-btn.active-mode {
                 background: #2563eb;
-                border-color: #3b82f6;
+                border-color: #60a5fa;
             }
-            .ui-btn.primary:hover {
-                background: #1d4ed8;
+            .ui-btn.browser-btn {
+                grid-column: 1 / -1;
+                background: #0f766e;
+                border-color: #2dd4bf;
+                color: #f0fdfa;
+            }
+            .ui-btn.browser-btn:hover {
+                background: #115e59;
+            }
+            .panel {
+                display: none;
+                flex-direction: column;
+                gap: 8px;
+                padding: 10px;
+                background: #0b0b0d;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+            }
+            .panel.show {
+                display: flex;
             }
             .section-label {
                 font-size: 11px;
@@ -141,12 +160,8 @@
                 display: grid;
                 grid-template-columns: repeat(4, 1fr);
                 gap: 6px;
-                max-height: 145px;
+                max-height: 130px;
                 overflow-y: auto;
-                padding: 6px;
-                background: #0b0b0d;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
             }
             .thumb-item {
                 aspect-ratio: 1 / 1;
@@ -157,45 +172,58 @@
                 cursor: pointer;
                 padding: 0;
             }
+            .thumb-item.active {
+                border-color: #3b82f6;
+            }
             .thumb-item img {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
                 display: block;
             }
-            .thumb-item.active {
-                border-color: #3b82f6;
-            }
-            .preview-wrap {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 6px;
-                padding: 8px;
-                background: #0b0b0d;
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                border-radius: 8px;
-            }
             .preview-canvas {
                 max-width: 100%;
-                max-height: 150px;
+                max-height: 140px;
                 border-radius: 6px;
                 background: #18181c;
+                align-self: center;
             }
-            .threshold-row {
+            .url-bar {
                 display: flex;
-                justify-content: space-between;
-                font-size: 11px;
-                color: #d4d4d8;
+                gap: 6px;
             }
-            input[type="range"] {
-                width: 100%;
-                accent-color: #3b82f6;
+            .url-input {
+                flex: 1;
+                min-width: 0;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                background: #18181c;
+                color: #f4f4f5;
+                font-size: 12px;
+                padding: 7px 9px;
+                outline: none;
             }
-            .bit-box {
+            .go-btn {
+                padding: 7px 11px;
+                border-radius: 8px;
+                border: 1px solid #2dd4bf;
+                background: #0f766e;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: 600;
+                cursor: pointer;
+            }
+            .mini-frame {
                 width: 100%;
-                min-height: 95px;
-                max-height: 150px;
+                height: 260px;
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                border-radius: 8px;
+                background: #ffffff;
+            }
+            .data-box {
+                width: 100%;
+                min-height: 105px;
+                max-height: 170px;
                 box-sizing: border-box;
                 border-radius: 8px;
                 border: 1px solid rgba(255, 255, 255, 0.12);
@@ -208,6 +236,16 @@
                 resize: vertical;
                 outline: none;
             }
+            .threshold-row {
+                display: flex;
+                justify-content: space-between;
+                font-size: 11px;
+                color: #d4d4d8;
+            }
+            input[type="range"] {
+                width: 100%;
+                accent-color: #3b82f6;
+            }
             .status-msg {
                 font-size: 11px;
                 color: #93c5fd;
@@ -219,35 +257,47 @@
 
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">Ảnh & Phân Tích Trắng Đen / Bit</span>
+                <span class="ui-title">Bảng Nút & Trình Duyệt Song Song</span>
                 <button class="ui-close" id="closeBtn">&times;</button>
             </div>
             <div class="ui-body">
-                <button class="ui-btn primary" id="loadAllBtn">Lấy tất cả ảnh trên trang</button>
+                <div class="btn-grid">
+                    <button class="ui-btn" id="btnGetImages">1. Lấy ảnh</button>
+                    <button class="ui-btn" id="btnGray">2. Trắng đen (Xám)</button>
+                    <button class="ui-btn" id="btnBW">3. Đen & Trắng</button>
+                    <button class="ui-btn" id="btnBits">4. Xuất chuỗi Bit</button>
+                    <button class="ui-btn browser-btn" id="btnMiniBrowser">5. Trình duyệt trong trình duyệt (Chạy song song)</button>
+                </div>
 
-                <div class="section-label">Danh sách ảnh (bấm để chọn 1 ảnh)</div>
-                <div class="gallery" id="gallery"></div>
-
-                <div class="preview-wrap">
+                <!-- Khu vực ảnh & phân tích -->
+                <div class="panel" id="imagePanel">
+                    <div class="section-label">Chọn 1 ảnh trên trang</div>
+                    <div class="gallery" id="gallery"></div>
                     <canvas class="preview-canvas" id="previewCanvas"></canvas>
+                    <div class="threshold-row">
+                        <span>Ngưỡng đen/trắng</span>
+                        <span id="thresholdVal">128</span>
+                    </div>
+                    <input type="range" id="thresholdSlider" min="0" max="255" value="128" />
                 </div>
 
-                <div class="threshold-row">
-                    <span>Ngưỡng trắng/đen (0 - 255)</span>
-                    <span id="thresholdVal">128</span>
-                </div>
-                <input type="range" id="thresholdSlider" min="0" max="255" value="128" />
-
-                <div class="row">
-                    <button class="ui-btn" id="grayBtn">Trắng đen (Xám)</button>
-                    <button class="ui-btn" id="bwBtn">Đen & Trắng (1-bit)</button>
-                    <button class="ui-btn primary" id="bitStreamBtn">Xuất chuỗi Bit</button>
+                <!-- Khu vực trình duyệt con chạy song song -->
+                <div class="panel" id="browserPanel">
+                    <div class="section-label">Trình duyệt song song (Safari)</div>
+                    <div class="url-bar">
+                        <input class="url-input" type="url" id="subUrlInput" value="https://example.com" placeholder="Nhập địa chỉ web (https://...)" />
+                        <button class="go-btn" id="subGoBtn">Mở</button>
+                    </div>
+                    <iframe class="mini-frame" id="subBrowserFrame" src="https://example.com" referrerpolicy="no-referrer"></iframe>
                 </div>
 
-                <div class="section-label">Dữ liệu phân tích / Chuỗi Bit (0 & 1)</div>
-                <textarea class="bit-box" id="bitBox" placeholder="Chọn 1 ảnh rồi bấm Trắng đen, Đen & Trắng hoặc Xuất chuỗi Bit..."></textarea>
+                <!-- Khu vực hiển thị kết quả bit/thông tin -->
+                <div class="panel show" id="resultPanel">
+                    <div class="section-label">Kết quả / Chuỗi Bit</div>
+                    <textarea class="data-box" id="resultBox" placeholder="Bấm các nút phía trên để sử dụng..."></textarea>
+                </div>
 
-                <div class="status-msg" id="statusMsg">Sẵn sàng (không cần API).</div>
+                <div class="status-msg" id="statusMsg">Sẵn sàng trên Safari.</div>
             </div>
         </div>
     `;
@@ -255,20 +305,36 @@
     const toggleBtn = shadow.getElementById('toggleBtn');
     const mainUi = shadow.getElementById('mainUi');
     const closeBtn = shadow.getElementById('closeBtn');
-    const loadAllBtn = shadow.getElementById('loadAllBtn');
+
+    const btnGetImages = shadow.getElementById('btnGetImages');
+    const btnGray = shadow.getElementById('btnGray');
+    const btnBW = shadow.getElementById('btnBW');
+    const btnBits = shadow.getElementById('btnBits');
+    const btnMiniBrowser = shadow.getElementById('btnMiniBrowser');
+
+    const imagePanel = shadow.getElementById('imagePanel');
+    const browserPanel = shadow.getElementById('browserPanel');
     const gallery = shadow.getElementById('gallery');
     const previewCanvas = shadow.getElementById('previewCanvas');
     const thresholdSlider = shadow.getElementById('thresholdSlider');
     const thresholdVal = shadow.getElementById('thresholdVal');
-    const grayBtn = shadow.getElementById('grayBtn');
-    const bwBtn = shadow.getElementById('bwBtn');
-    const bitStreamBtn = shadow.getElementById('bitStreamBtn');
-    const bitBox = shadow.getElementById('bitBox');
+
+    const subUrlInput = shadow.getElementById('subUrlInput');
+    const subGoBtn = shadow.getElementById('subGoBtn');
+    const subBrowserFrame = shadow.getElementById('subBrowserFrame');
+
+    const resultBox = shadow.getElementById('resultBox');
     const statusMsg = shadow.getElementById('statusMsg');
 
     const ctx = previewCanvas.getContext('2d', { willReadFrequently: true });
     let currentImgEl = null;
-    let currentMode = 'original';
+    let currentFilterMode = null;
+
+    function setActiveButton(activeBtn) {
+        [btnGetImages, btnGray, btnBW, btnBits, btnMiniBrowser].forEach((b) => {
+            b.classList.toggle('active-mode', b === activeBtn);
+        });
+    }
 
     let isOpen = false;
     function setOpen(state) {
@@ -317,55 +383,11 @@
         }
     });
 
-    thresholdSlider.addEventListener('input', () => {
-        thresholdVal.textContent = thresholdSlider.value;
-        if (currentImgEl && currentMode !== 'original') {
-            applyFilter(currentMode);
-        }
-    });
-
-    // Lấy toàn bộ ảnh trên trang đưa vào gallery
-    function collectAllImages() {
-        gallery.innerHTML = '';
-        const imgs = Array.from(document.querySelectorAll('img')).filter((img) => {
-            if (root.contains(img)) return false;
-            const src = img.currentSrc || img.src || '';
-            return Boolean(src);
-        });
-
-        if (!imgs.length) {
-            statusMsg.textContent = 'Không tìm thấy thẻ ảnh nào trên trang này.';
-            return;
-        }
-
-        imgs.forEach((img, idx) => {
-            const btn = document.createElement('button');
-            btn.className = 'thumb-item';
-            btn.title = `Ảnh #${idx + 1}`;
-
-            const thumb = document.createElement('img');
-            thumb.src = img.currentSrc || img.src;
-            thumb.alt = `Ảnh ${idx + 1}`;
-
-            btn.appendChild(thumb);
-            btn.addEventListener('click', () => {
-                gallery.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('active'));
-                btn.classList.add('active');
-                selectImage(img, idx + 1);
-            });
-
-            gallery.appendChild(btn);
-        });
-
-        statusMsg.textContent = `Đã đưa ${imgs.length} ảnh vào UI. Chạm vào 1 ảnh để phân tích.`;
-    }
-
-    // Vẽ ảnh được chọn lên canvas (có thử crossOrigin nếu bị chặn)
     async function drawSourceToCanvas(imgEl) {
         const draw = (srcImg) => {
             const w = srcImg.naturalWidth || srcImg.width;
             const h = srcImg.naturalHeight || srcImg.height;
-            if (!w || !h) throw new Error('Ảnh chưa tải xong hoặc kích thước 0.');
+            if (!w || !h) throw new Error('Ảnh chưa tải xong.');
 
             const maxSide = 320;
             const scale = Math.min(1, maxSide / Math.max(w, h));
@@ -398,115 +420,181 @@
         }
     }
 
-    async function selectImage(imgEl, indexNum) {
-        currentImgEl = imgEl;
-        currentMode = 'original';
-        const ok = await drawSourceToCanvas(imgEl);
-        if (ok) {
-            statusMsg.textContent = `Đã chọn Ảnh #${indexNum} (${previewCanvas.width}x${previewCanvas.height}px).`;
-        } else {
-            statusMsg.textContent = `Ảnh #${indexNum} bị chặn CORS nên không đọc pixel được.`;
-        }
-    }
+    // Nút 1: Lấy tất cả ảnh
+    btnGetImages.addEventListener('click', () => {
+        setActiveButton(btnGetImages);
+        imagePanel.classList.add('show');
+        gallery.innerHTML = '';
 
-    // Áp dụng kiểu phân tích: 'gray' (trắng đen xám) hoặc 'bw' (đen & trắng 1-bit)
-    async function applyFilter(mode) {
+        const imgs = Array.from(document.querySelectorAll('img')).filter((img) => {
+            if (root.contains(img)) return false;
+            return Boolean(img.currentSrc || img.src);
+        });
+
+        if (!imgs.length) {
+            statusMsg.textContent = 'Không tìm thấy ảnh nào trên trang này.';
+            return;
+        }
+
+        imgs.forEach((img, idx) => {
+            const btn = document.createElement('button');
+            btn.className = 'thumb-item';
+            const thumb = document.createElement('img');
+            thumb.src = img.currentSrc || img.src;
+            thumb.alt = `Ảnh ${idx + 1}`;
+            btn.appendChild(thumb);
+
+            btn.addEventListener('click', async () => {
+                gallery.querySelectorAll('.thumb-item').forEach((el) => el.classList.remove('active'));
+                btn.classList.add('active');
+                currentImgEl = img;
+                currentFilterMode = null;
+                const ok = await drawSourceToCanvas(img);
+                statusMsg.textContent = ok
+                    ? `Đã chọn Ảnh #${idx + 1}. Bấm nút Trắng đen, Đen & Trắng hoặc Xuất chuỗi Bit.`
+                    : `Ảnh #${idx + 1} bị chặn CORS, hãy thử ảnh khác.`;
+            });
+
+            gallery.appendChild(btn);
+        });
+
+        statusMsg.textContent = `Đã lấy ${imgs.length} ảnh. Chạm vào 1 ảnh để chọn.`;
+    });
+
+    async function runGrayOrBW(mode) {
         if (!currentImgEl) {
-            statusMsg.textContent = 'Hãy chọn 1 ảnh trong danh sách trước.';
+            imagePanel.classList.add('show');
+            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chạm vào 1 ảnh trước.';
             return;
         }
 
         const ok = await drawSourceToCanvas(currentImgEl);
         if (!ok) {
-            statusMsg.textContent = 'Không đọc được pixel của ảnh này (chặn CORS).';
+            statusMsg.textContent = 'Không đọc được pixel ảnh này (chặn CORS).';
             return;
         }
 
-        currentMode = mode;
+        currentFilterMode = mode;
         const threshold = Number(thresholdSlider.value || 128);
         const imgData = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-        const data = imgData.data;
+        const d = imgData.data;
 
-        let whitePixels = 0;
-        let blackPixels = 0;
+        let lightCount = 0;
+        let darkCount = 0;
 
-        for (let i = 0; i < data.length; i += 4) {
-            const lum = Math.round(0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]);
+        for (let i = 0; i < d.length; i += 4) {
+            const lum = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
             if (mode === 'gray') {
-                data[i] = lum;
-                data[i + 1] = lum;
-                data[i + 2] = lum;
-                if (lum >= threshold) whitePixels++;
-                else blackPixels++;
-            } else if (mode === 'bw') {
-                const val = lum >= threshold ? 255 : 0;
-                data[i] = val;
-                data[i + 1] = val;
-                data[i + 2] = val;
-                if (val === 255) whitePixels++;
-                else blackPixels++;
+                d[i] = lum;
+                d[i + 1] = lum;
+                d[i + 2] = lum;
+                if (lum >= threshold) lightCount++;
+                else darkCount++;
+            } else {
+                const v = lum >= threshold ? 255 : 0;
+                d[i] = v;
+                d[i + 1] = v;
+                d[i + 2] = v;
+                if (v === 255) lightCount++;
+                else darkCount++;
             }
         }
 
         ctx.putImageData(imgData, 0, 0);
-        const total = whitePixels + blackPixels;
-        const pctWhite = total ? ((whitePixels / total) * 100).toFixed(1) : '0.0';
-        const pctBlack = total ? ((blackPixels / total) * 100).toFixed(1) : '0.0';
-
-        bitBox.value =
-            `Chế độ: ${mode === 'gray' ? 'Trắng đen (Grayscale)' : 'Đen & Trắng (1-bit)'}\n` +
-            `Kích thước phân tích: ${previewCanvas.width} x ${previewCanvas.height}\n` +
+        const total = lightCount + darkCount;
+        resultBox.value =
+            `Chế độ: ${mode === 'gray' ? 'Trắng đen (Xám)' : 'Đen & Trắng'}\n` +
             `Ngưỡng: ${threshold}\n` +
-            `Pixel sáng/trắng: ${whitePixels} (${pctWhite}%)\n` +
-            `Pixel tối/đen: ${blackPixels} (${pctBlack}%)`;
-
-        statusMsg.textContent = `Đã chuyển sang ${mode === 'gray' ? 'trắng đen (xám)' : 'đen & trắng'}.`;
+            `Sáng/Trắng: ${lightCount} (${((lightCount / total) * 100).toFixed(1)}%)\n` +
+            `Tối/Đen: ${darkCount} (${((darkCount / total) * 100).toFixed(1)}%)`;
+        statusMsg.textContent = `Đã xử lý ${mode === 'gray' ? 'trắng đen (xám)' : 'đen & trắng'}.`;
     }
 
-    // Xuất chuỗi bit 0 / 1 từ ảnh đang chọn
-    async function exportBitStream() {
+    // Nút 2: Trắng đen (Xám)
+    btnGray.addEventListener('click', () => {
+        setActiveButton(btnGray);
+        imagePanel.classList.add('show');
+        runGrayOrBW('gray');
+    });
+
+    // Nút 3: Đen & Trắng
+    btnBW.addEventListener('click', () => {
+        setActiveButton(btnBW);
+        imagePanel.classList.add('show');
+        runGrayOrBW('bw');
+    });
+
+    thresholdSlider.addEventListener('input', () => {
+        thresholdVal.textContent = thresholdSlider.value;
+        if (currentFilterMode) {
+            runGrayOrBW(currentFilterMode);
+        }
+    });
+
+    // Nút 4: Xuất chuỗi Bit
+    btnBits.addEventListener('click', async () => {
+        setActiveButton(btnBits);
         if (!currentImgEl) {
-            statusMsg.textContent = 'Hãy chọn 1 ảnh trong danh sách trước.';
+            imagePanel.classList.add('show');
+            statusMsg.textContent = 'Hãy bấm "1. Lấy ảnh" và chạm vào 1 ảnh trước.';
             return;
         }
 
         const ok = await drawSourceToCanvas(currentImgEl);
         if (!ok) {
-            statusMsg.textContent = 'Không đọc được pixel của ảnh này (chặn CORS).';
+            statusMsg.textContent = 'Không đọc được pixel ảnh này (chặn CORS).';
             return;
         }
 
-        currentMode = 'bw';
         const threshold = Number(thresholdSlider.value || 128);
         const imgData = ctx.getImageData(0, 0, previewCanvas.width, previewCanvas.height);
-        const data = imgData.data;
+        const d = imgData.data;
 
-        // Thu gọn lưới bit tối đa 96 cột để xem và copy dễ trên điện thoại
-        const targetCols = Math.min(96, previewCanvas.width);
-        const stepX = previewCanvas.width / targetCols;
-        const targetRows = Math.max(1, Math.round((previewCanvas.height / previewCanvas.width) * targetCols * 0.55));
-        const stepY = previewCanvas.height / targetRows;
+        const cols = Math.min(96, previewCanvas.width);
+        const rows = Math.max(1, Math.round((previewCanvas.height / previewCanvas.width) * cols * 0.55));
+        const stepX = previewCanvas.width / cols;
+        const stepY = previewCanvas.height / rows;
 
         const lines = [];
-        for (let r = 0; r < targetRows; r++) {
+        for (let r = 0; r < rows; r++) {
             const py = Math.min(previewCanvas.height - 1, Math.floor(r * stepY));
-            let rowBits = '';
-            for (let c = 0; c < targetCols; c++) {
+            let row = '';
+            for (let c = 0; c < cols; c++) {
                 const px = Math.min(previewCanvas.width - 1, Math.floor(c * stepX));
                 const idx = (py * previewCanvas.width + px) * 4;
-                const lum = 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
-                rowBits += lum >= threshold ? '1' : '0';
+                const lum = 0.299 * d[idx] + 0.587 * d[idx + 1] + 0.114 * d[idx + 2];
+                row += lum >= threshold ? '1' : '0';
             }
-            lines.push(rowBits);
+            lines.push(row);
         }
 
-        const bitText = lines.join('\n');
-        bitBox.value = bitText;
-        statusMsg.textContent = `Đã xuất lưới bit (${targetCols}x${targetRows}, 1=sáng, 0=tối).`;
+        resultBox.value = lines.join('\n');
+        statusMsg.textContent = `Đã xuất chuỗi bit (${cols}x${rows}).`;
+    });
+
+    // Nút 5: Bật/tắt trình duyệt con chạy song song trong UI
+    btnMiniBrowser.addEventListener('click', () => {
+        const willShow = !browserPanel.classList.contains('show');
+        browserPanel.classList.toggle('show', willShow);
+        btnMiniBrowser.classList.toggle('active-mode', willShow);
+        statusMsg.textContent = willShow
+            ? 'Đã mở trình duyệt con chạy song song với trang Safari chính.'
+            : 'Đã thu gọn trình duyệt con.';
+    });
+
+    function navigateMiniBrowser() {
+        let raw = subUrlInput.value.trim();
+        if (!raw) return;
+        if (!/^https?:\/\//i.test(raw)) {
+            raw = 'https://' + raw;
+        }
+        subUrlInput.value = raw;
+        subBrowserFrame.src = raw;
+        statusMsg.textContent = 'Đang tải trang trong trình duyệt con: ' + raw;
     }
 
-    loadAllBtn.addEventListener('click', collectAllImages);
-    grayBtn.addEventListener('click', () => applyFilter('gray'));
-    bwBtn.addEventListener('click', () => applyFilter('bw'));
-    bitStreamBtn.addEventListener('click', exportBitStream);
+    subGoBtn.addEventListener('click', navigateMiniBrowser);
+    subUrlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') navigateMiniBrowser();
+    });
 })();
