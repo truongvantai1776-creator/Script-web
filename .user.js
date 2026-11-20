@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - Live Safari Search & Current Site Finder
+// @name         Universal UI - Search Inside UI & Image Bit/BW Analyzer
 // @namespace    http://tampermonkey.net/
-// @version      10.0
-// @description  Tìm kiếm trực tiếp trên trang Safari hiện tại, cuộn tới mục khớp và bám theo web đang dùng
+// @version      11.0
+// @description  Tìm kiếm ngay bên trong UI, giữ nút UI nổi và phân tích ảnh trắng đen / đen trắng / chuỗi bit
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -105,17 +105,6 @@
                 overflow-y: auto;
                 -webkit-overflow-scrolling: touch;
             }
-            .current-site-tag {
-                font-size: 11px;
-                color: #93c5fd;
-                background: #172554;
-                border: 1px solid rgba(96, 165, 250, 0.35);
-                padding: 6px 9px;
-                border-radius: 8px;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
             .btn-grid {
                 display: grid;
                 grid-template-columns: repeat(2, 1fr);
@@ -139,7 +128,7 @@
                 background: #2563eb;
                 border-color: #60a5fa;
             }
-            .ui-btn.find-btn {
+            .ui-btn.search-top-btn {
                 grid-column: 1 / -1;
                 background: #1d4ed8;
                 border-color: #60a5fa;
@@ -190,9 +179,9 @@
                 cursor: pointer;
                 white-space: nowrap;
             }
-            .small-btn.teal {
-                border-color: #2dd4bf;
-                background: #0f766e;
+            .small-btn.primary {
+                border-color: #60a5fa;
+                background: #1d4ed8;
             }
             .found-list {
                 display: flex;
@@ -277,8 +266,8 @@
             }
             .data-box {
                 width: 100%;
-                min-height: 90px;
-                max-height: 155px;
+                min-height: 95px;
+                max-height: 160px;
                 box-sizing: border-box;
                 border-radius: 8px;
                 border: 1px solid rgba(255, 255, 255, 0.12);
@@ -312,27 +301,25 @@
 
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">Tìm Trên Safari & Phân Tích</span>
+                <span class="ui-title">Tìm Trong UI & Phân Tích Ảnh</span>
                 <button class="ui-close" id="closeBtn">&times;</button>
             </div>
             <div class="ui-body">
-                <div class="current-site-tag" id="currentSiteTag">Safari: ...</div>
-
                 <div class="btn-grid">
-                    <button class="ui-btn find-btn" id="btnFindSafari">0. Tìm kiếm trên trang Safari hiện tại</button>
+                    <button class="ui-btn search-top-btn" id="btnSearchInUi">0. Tìm kiếm trong UI</button>
                     <button class="ui-btn" id="btnGetImages">1. Lấy ảnh</button>
                     <button class="ui-btn" id="btnGray">2. Trắng đen (Xám)</button>
                     <button class="ui-btn" id="btnBW">3. Đen & Trắng</button>
                     <button class="ui-btn" id="btnBits">4. Xuất chuỗi Bit</button>
                 </div>
 
-                <!-- Khu vực tìm kiếm trực tiếp trên trang Safari đang mở -->
-                <div class="panel" id="finderPanel">
-                    <div class="section-label">Tìm từ khóa / tên đồ trên trang Safari này</div>
+                <!-- Khu vực tìm kiếm ngay bên trong UI -->
+                <div class="panel" id="searchPanel">
+                    <div class="section-label">Tìm từ khóa / tên ngay trong UI</div>
                     <div class="search-row">
-                        <input class="input-box" type="text" id="safariSearchInput" placeholder="Nhập từ khóa / tên cần tìm trên Safari..." />
-                        <button class="small-btn" id="findInPageBtn">Tìm trang</button>
-                        <button class="small-btn teal" id="searchWebSiteBtn">Tìm web</button>
+                        <input class="input-box" type="text" id="uiSearchInput" placeholder="Nhập từ khóa / tên cần tìm..." />
+                        <button class="small-btn primary" id="uiSearchRunBtn">Tìm</button>
+                        <button class="small-btn" id="uiSearchClearBtn">Xóa</button>
                     </div>
                     <div class="found-list" id="foundItemsList"></div>
                 </div>
@@ -356,11 +343,11 @@
 
                 <!-- Khu vực kết quả -->
                 <div class="panel show" id="resultPanel">
-                    <div class="section-label">Kết quả / Chuỗi Bit</div>
-                    <textarea class="data-box" id="resultBox" placeholder="Kết quả tìm kiếm trên Safari hoặc chuỗi bit sẽ hiện ở đây..."></textarea>
+                    <div class="section-label">Kết quả tìm kiếm trong UI / Chuỗi Bit</div>
+                    <textarea class="data-box" id="resultBox" placeholder="Kết quả tìm kiếm hoặc chuỗi bit sẽ hiện ngay tại đây..."></textarea>
                 </div>
 
-                <div class="status-msg" id="statusMsg">Sẵn sàng tìm trên Safari.</div>
+                <div class="status-msg" id="statusMsg">Sẵn sàng tìm trong UI.</div>
             </div>
         </div>
     `;
@@ -368,18 +355,17 @@
     const toggleBtn = shadow.getElementById('toggleBtn');
     const mainUi = shadow.getElementById('mainUi');
     const closeBtn = shadow.getElementById('closeBtn');
-    const currentSiteTag = shadow.getElementById('currentSiteTag');
 
-    const btnFindSafari = shadow.getElementById('btnFindSafari');
+    const btnSearchInUi = shadow.getElementById('btnSearchInUi');
     const btnGetImages = shadow.getElementById('btnGetImages');
     const btnGray = shadow.getElementById('btnGray');
     const btnBW = shadow.getElementById('btnBW');
     const btnBits = shadow.getElementById('btnBits');
 
-    const finderPanel = shadow.getElementById('finderPanel');
-    const safariSearchInput = shadow.getElementById('safariSearchInput');
-    const findInPageBtn = shadow.getElementById('findInPageBtn');
-    const searchWebSiteBtn = shadow.getElementById('searchWebSiteBtn');
+    const searchPanel = shadow.getElementById('searchPanel');
+    const uiSearchInput = shadow.getElementById('uiSearchInput');
+    const uiSearchRunBtn = shadow.getElementById('uiSearchRunBtn');
+    const uiSearchClearBtn = shadow.getElementById('uiSearchClearBtn');
     const foundItemsList = shadow.getElementById('foundItemsList');
 
     const imagePanel = shadow.getElementById('imagePanel');
@@ -398,10 +384,6 @@
     let allImageRecords = [];
     let currentImgEl = null;
     let currentFilterMode = null;
-    let lastHighlightedEl = null;
-    let lastHighlightedOutline = '';
-
-    currentSiteTag.textContent = `Safari: ${location.hostname} — ${location.href}`;
 
     let isOpen = false;
     function setOpen(state) {
@@ -451,148 +433,116 @@
     });
 
     function setActiveButton(activeBtn) {
-        [btnFindSafari, btnGetImages, btnGray, btnBW, btnBits].forEach((b) => {
+        [btnSearchInUi, btnGetImages, btnGray, btnBW, btnBits].forEach((b) => {
             b.classList.toggle('active-mode', b === activeBtn);
         });
     }
 
-    function clearPreviousHighlight() {
-        if (lastHighlightedEl && lastHighlightedEl.isConnected) {
-            lastHighlightedEl.style.outline = lastHighlightedOutline;
-        }
-        lastHighlightedEl = null;
-        lastHighlightedOutline = '';
-    }
-
-    function jumpToElementOnSafari(el, labelText) {
-        if (!el || !el.isConnected) return;
-        clearPreviousHighlight();
-        lastHighlightedEl = el;
-        lastHighlightedOutline = el.style.outline || '';
-        el.style.outline = '3px solid #2563eb';
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        statusMsg.textContent = `Đã cuộn tới trên Safari: "${labelText}"`;
-    }
-
-    // Tìm trực tiếp trên nội dung trang Safari hiện tại
-    function searchDirectlyOnSafariPage() {
-        const q = safariSearchInput.value.trim();
+    // Tìm kiếm ngay trong UI (tìm trong nội dung trang/ảnh/kết quả hiện có và hiển thị danh sách ngay trong UI)
+    function runSearchInsideUi() {
+        const q = uiSearchInput.value.trim();
         foundItemsList.innerHTML = '';
 
         if (!q) {
-            statusMsg.textContent = 'Nhập từ khóa hoặc tên đồ cần tìm trên trang Safari hiện tại.';
+            statusMsg.textContent = 'Nhập từ khóa hoặc tên cần tìm ngay trong UI.';
             return;
         }
 
         const lowerQ = q.toLowerCase();
-        const nodes = Array.from(document.querySelectorAll('a, button, p, li, h1, h2, h3, h4, span, div, article')).filter((el) => {
-            if (root.contains(el)) return false;
-            if (el.children.length > 4) return false;
-            const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-            return t.length >= 2 && t.length <= 180 && t.toLowerCase().includes(lowerQ);
+        const matches = [];
+        const seen = new Set();
+
+        // 1. Tìm trong danh sách ảnh đã lấy
+        allImageRecords.forEach((rec, i) => {
+            if (rec.searchable.includes(lowerQ)) {
+                const label = `[Ảnh #${i + 1}] ${rec.displayName}`;
+                if (!seen.has(label)) {
+                    seen.add(label);
+                    matches.push({ label, kind: 'image', record: rec });
+                }
+            }
         });
 
-        const uniqueMatches = [];
-        const seenTexts = new Set();
-
-        for (const el of nodes) {
-            const text = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-            if (seenTexts.has(text)) continue;
-            seenTexts.add(text);
-            uniqueMatches.push({ el, text });
-            if (uniqueMatches.length >= 40) break;
-        }
-
-        const bodyText = (document.body.innerText || '').toLowerCase();
-        let totalOccurrences = 0;
-        if (lowerQ.length > 0) {
-            let pos = bodyText.indexOf(lowerQ);
-            while (pos !== -1) {
-                totalOccurrences++;
-                pos = bodyText.indexOf(lowerQ, pos + lowerQ.length);
+        // 2. Tìm trong các dòng/mục chữ trên trang
+        const textNodes = Array.from(document.querySelectorAll('a, button, p, li, h1, h2, h3, h4, span, div, article')).filter(
+            (el) => {
+                if (root.contains(el)) return false;
+                if (el.children.length > 4) return false;
+                const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+                return t.length >= 2 && t.length <= 160 && t.toLowerCase().includes(lowerQ);
             }
+        );
+
+        for (const el of textNodes) {
+            const t = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (seen.has(t)) continue;
+            seen.add(t);
+            matches.push({ label: t, kind: 'text', element: el });
+            if (matches.length >= 40) break;
         }
 
-        resultBox.value =
-            `Trang Safari: ${location.href}\n` +
-            `Từ khóa: "${q}"\n` +
-            `Số lần xuất hiện trên trang: ${totalOccurrences}\n` +
-            `Số mục tìm thấy: ${uniqueMatches.length}`;
-
-        if (!uniqueMatches.length) {
-            foundItemsList.innerHTML = `<div class="found-text">Không tìm thấy "${q}" trên trang Safari hiện tại.</div>`;
-            statusMsg.textContent = `Không thấy "${q}" trên trang này. Bạn có thể bấm "Tìm web".`;
+        if (!matches.length) {
+            foundItemsList.innerHTML = `<div class="found-text">Không thấy "${q}" trong kết quả UI.</div>`;
+            resultBox.value = `Từ khóa: "${q}"\nKết quả: 0 mục khớp.`;
+            statusMsg.textContent = `Không tìm thấy "${q}".`;
             return;
         }
 
-        uniqueMatches.forEach((m) => {
+        resultBox.value =
+            `Từ khóa tìm trong UI: "${q}"\n` +
+            `Tìm thấy: ${matches.length} mục\n\n` +
+            matches.map((m, idx) => `${idx + 1}. ${m.label}`).join('\n');
+
+        matches.forEach((m) => {
             const row = document.createElement('div');
             row.className = 'found-item';
 
             const txt = document.createElement('div');
             txt.className = 'found-text';
-            txt.title = m.text;
-            txt.textContent = m.text;
+            txt.title = m.label;
+            txt.textContent = m.label;
 
-            const jumpBtn = document.createElement('button');
-            jumpBtn.className = 'found-jump';
-            jumpBtn.textContent = 'Tới mục';
-            jumpBtn.addEventListener('click', () => {
-                jumpToElementOnSafari(m.el, m.text);
+            const actBtn = document.createElement('button');
+            actBtn.className = 'found-jump';
+            actBtn.textContent = m.kind === 'image' ? 'Chọn ảnh' : 'Xem';
+            actBtn.addEventListener('click', async () => {
+                if (m.kind === 'image' && m.record) {
+                    imagePanel.classList.add('show');
+                    currentImgEl = m.record.img;
+                    currentFilterMode = null;
+                    const ok = await drawSourceToCanvas(m.record.img);
+                    statusMsg.textContent = ok
+                        ? `Đã chọn ảnh "${m.record.displayName}" trong UI.`
+                        : `Ảnh "${m.record.displayName}" bị chặn CORS.`;
+                } else if (m.element && m.element.isConnected) {
+                    m.element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    resultBox.value = `Mục đã chọn:\n${m.label}`;
+                    statusMsg.textContent = `Đã hiển thị mục "${m.label}" trong UI.`;
+                }
             });
 
             row.appendChild(txt);
-            row.appendChild(jumpBtn);
+            row.appendChild(actBtn);
             foundItemsList.appendChild(row);
         });
 
-        // Tự động cuộn tới kết quả đầu tiên trên Safari
-        jumpToElementOnSafari(uniqueMatches[0].el, uniqueMatches[0].text);
+        statusMsg.textContent = `Tìm thấy ${matches.length} kết quả cho "${q}" ngay trong UI.`;
     }
 
-    // Tìm kiếm trên Safari bám theo chính trang web/tên miền hiện tại
-    function searchOnCurrentSiteInSafari() {
-        const q = safariSearchInput.value.trim();
-        if (!q) {
-            statusMsg.textContent = 'Nhập từ khóa trước khi bấm Tìm web.';
-            return;
-        }
-
-        // Thử điền vào ô tìm kiếm có sẵn trên trang hiện tại nếu có
-        const pageSearchInput = Array.from(document.querySelectorAll('input[type="search"], input[name*="q"], input[placeholder*="tìm" i], input[placeholder*="search" i]')).find(
-            (inp) => !root.contains(inp) && inp.offsetParent !== null
-        );
-
-        if (pageSearchInput) {
-            pageSearchInput.focus();
-            pageSearchInput.value = q;
-            pageSearchInput.dispatchEvent(new Event('input', { bubbles: true }));
-            pageSearchInput.dispatchEvent(new Event('change', { bubbles: true }));
-            const form = pageSearchInput.closest('form');
-            if (form) {
-                statusMsg.textContent = `Đang gửi từ khóa "${q}" vào ô tìm kiếm của ${location.hostname}...`;
-                form.submit();
-                return;
-            }
-        }
-
-        // Nếu trang không có form tìm kiếm sẵn, điều hướng tab Safari hiện tại theo tên miền hiện tại
-        const targetUrl = `https://www.google.com/search?q=${encodeURIComponent(`site:${location.hostname} ${q}`)}`;
-        statusMsg.textContent = `Đang tìm "${q}" trên ${location.hostname} trong Safari...`;
-        window.location.href = targetUrl;
-    }
-
-    btnFindSafari.addEventListener('click', () => {
-        setActiveButton(btnFindSafari);
-        finderPanel.classList.add('show');
+    btnSearchInUi.addEventListener('click', () => {
+        setActiveButton(btnSearchInUi);
+        searchPanel.classList.add('show');
+        uiSearchInput.focus();
     });
 
-    findInPageBtn.addEventListener('click', searchDirectlyOnSafariPage);
-    searchWebSiteBtn.addEventListener('click', searchOnCurrentSiteInSafari);
-    safariSearchInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            searchDirectlyOnSafariPage();
-        }
+    uiSearchRunBtn.addEventListener('click', runSearchInsideUi);
+    uiSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') runSearchInsideUi();
+    });
+    uiSearchClearBtn.addEventListener('click', () => {
+        uiSearchInput.value = '';
+        foundItemsList.innerHTML = '';
+        statusMsg.textContent = 'Đã xóa ô tìm kiếm trong UI.';
     });
 
     function getImageName(img, idx) {
@@ -671,7 +621,7 @@
         });
 
         renderGallery(allImageRecords);
-        statusMsg.textContent = `Đã lấy ${allImageRecords.length} ảnh trên trang Safari hiện tại.`;
+        statusMsg.textContent = `Đã lấy ${allImageRecords.length} ảnh vào UI.`;
     });
 
     function filterImagesByName() {
@@ -842,4 +792,3 @@
         statusMsg.textContent = `Đã xuất chuỗi bit (${cols}x${rows}).`;
     });
 })();
-
