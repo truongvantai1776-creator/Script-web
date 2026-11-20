@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal UI - Read Text, Image & Explain
+// @name         Universal UI - Auto Image OCR & Step Filter VIP
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Đọc text trang web, phân tích ảnh và giải thích ngay trên UI nổi
+// @version      3.0
+// @description  Tự lấy ảnh chuyển sang text (OCR) và lọc các dòng/câu Bước 1..Bước 5+
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -59,7 +59,7 @@
                 position: fixed;
                 bottom: 84px;
                 right: 20px;
-                width: 350px;
+                width: 360px;
                 max-width: calc(100vw - 32px);
                 max-height: calc(100vh - 110px);
                 background: #111114;
@@ -86,6 +86,15 @@
             .ui-title {
                 font-size: 14px;
                 font-weight: 700;
+            }
+            .vip-badge {
+                font-size: 10px;
+                font-weight: 700;
+                padding: 2px 6px;
+                border-radius: 999px;
+                background: #f59e0b;
+                color: #111114;
+                margin-left: 6px;
             }
             .ui-close {
                 background: transparent;
@@ -123,7 +132,7 @@
                 outline: none;
             }
             .textarea {
-                min-height: 78px;
+                min-height: 76px;
                 resize: vertical;
             }
             .ui-btn {
@@ -147,6 +156,21 @@
             .ui-btn.primary:hover {
                 background: #1d4ed8;
             }
+            .ui-btn.vip {
+                background: #b45309;
+                border-color: #f59e0b;
+                color: #fffbeb;
+            }
+            .ui-btn.vip:hover {
+                background: #92400e;
+            }
+            .section-label {
+                font-size: 11px;
+                font-weight: 700;
+                color: #a1a1aa;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+            }
             .output-box {
                 background: #0b0b0d;
                 border: 1px solid rgba(255, 255, 255, 0.1);
@@ -156,7 +180,19 @@
                 line-height: 1.5;
                 color: #e4e4e7;
                 white-space: pre-wrap;
-                max-height: 220px;
+                max-height: 180px;
+                overflow-y: auto;
+            }
+            .step-box {
+                background: #141109;
+                border: 1px solid rgba(245, 158, 11, 0.35);
+                border-radius: 8px;
+                padding: 10px;
+                font-size: 12px;
+                line-height: 1.55;
+                color: #fde68a;
+                white-space: pre-wrap;
+                max-height: 180px;
                 overflow-y: auto;
             }
             .status-msg {
@@ -166,7 +202,7 @@
             }
             .img-preview {
                 max-width: 100%;
-                max-height: 120px;
+                max-height: 110px;
                 border-radius: 8px;
                 object-fit: contain;
                 background: #18181c;
@@ -181,25 +217,37 @@
 
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">Đọc & Giải Thích</span>
+                <div>
+                    <span class="ui-title">Ảnh -> Text & Lọc Bước</span>
+                    <span class="vip-badge">VIP</span>
+                </div>
                 <button class="ui-close" id="closeBtn">&times;</button>
             </div>
             <div class="ui-body">
                 <input class="input" type="password" id="apiKeyInput" placeholder="Dán Gemini API Key tại đây..." />
 
                 <div class="row">
-                    <button class="ui-btn" id="readTextBtn">Đọc text trang</button>
-                    <button class="ui-btn" id="pickImgBtn">Chọn ảnh trên web</button>
+                    <button class="ui-btn primary" id="autoOcrBtn">Tự lấy ảnh -> Text</button>
+                    <button class="ui-btn" id="pickImgBtn">Chọn 1 ảnh</button>
                 </div>
 
-                <img class="img-preview" id="imgPreview" alt="Ảnh đã chọn" />
+                <img class="img-preview" id="imgPreview" alt="Ảnh đang xử lý" />
 
-                <textarea class="textarea" id="promptInput" placeholder="Nội dung text hoặc câu hỏi cần giải thích..."></textarea>
+                <div class="section-label">Text trích xuất / Nội dung</div>
+                <textarea class="textarea" id="textBox" placeholder="Chữ lấy từ ảnh hoặc nội dung có Bước 1, Bước 2... sẽ hiện ở đây..."></textarea>
 
-                <button class="ui-btn primary" id="explainBtn">Phân tích & Giải thích</button>
+                <div class="row">
+                    <button class="ui-btn vip" id="filterStepsBtn">VIP: Lọc Bước 1..5+</button>
+                    <button class="ui-btn" id="explainBtn">Giải thích</button>
+                </div>
+
+                <div class="section-label">Kết quả lọc Bước (VIP)</div>
+                <div class="step-box" id="stepBox">Chưa lọc bước nào.</div>
+
+                <div class="section-label">Kết quả / Giải thích</div>
+                <div class="output-box" id="outputBox">Sẵn sàng.</div>
 
                 <div class="status-msg" id="statusMsg">Sẵn sàng.</div>
-                <div class="output-box" id="outputBox">Kết quả giải thích sẽ hiển thị ở đây.</div>
             </div>
         </div>
     `;
@@ -208,16 +256,16 @@
     const mainUi = shadow.getElementById('mainUi');
     const closeBtn = shadow.getElementById('closeBtn');
     const apiKeyInput = shadow.getElementById('apiKeyInput');
-    const readTextBtn = shadow.getElementById('readTextBtn');
+    const autoOcrBtn = shadow.getElementById('autoOcrBtn');
     const pickImgBtn = shadow.getElementById('pickImgBtn');
     const imgPreview = shadow.getElementById('imgPreview');
-    const promptInput = shadow.getElementById('promptInput');
+    const textBox = shadow.getElementById('textBox');
+    const filterStepsBtn = shadow.getElementById('filterStepsBtn');
     const explainBtn = shadow.getElementById('explainBtn');
-    const statusMsg = shadow.getElementById('statusMsg');
+    const stepBox = shadow.getElementById('stepBox');
     const outputBox = shadow.getElementById('outputBox');
+    const statusMsg = shadow.getElementById('statusMsg');
 
-    let selectedImageBase64 = null;
-    let selectedImageMime = null;
     let pickingImage = false;
 
     const savedKey = localStorage.getItem(STORAGE_KEY);
@@ -274,54 +322,160 @@
         }
     });
 
-    // 1. Đọc text đang bôi đen hoặc text chính trên trang
-    readTextBtn.addEventListener('click', () => {
-        const selected = window.getSelection ? window.getSelection().toString().trim() : '';
-        const bodyText = (document.body.innerText || '').replace(/\s+/g, ' ').trim();
-        const extracted = selected || bodyText.slice(0, 2500);
+    // Chuyển phần tử <img> sang base64 (có thử crossOrigin nếu cần)
+    async function imgElementToBase64(imgEl) {
+        const tryDraw = (sourceImg) => {
+            const canvas = document.createElement('canvas');
+            const w = sourceImg.naturalWidth || sourceImg.width;
+            const h = sourceImg.naturalHeight || sourceImg.height;
+            if (!w || !h) throw new Error('Ảnh không có kích thước hợp lệ.');
 
-        if (!extracted) {
-            statusMsg.textContent = 'Không tìm thấy text nào trên trang.';
+            const maxSide = 1280;
+            const scale = Math.min(1, maxSide / Math.max(w, h));
+            canvas.width = Math.round(w * scale);
+            canvas.height = Math.round(h * scale);
+
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(sourceImg, 0, 0, canvas.width, canvas.height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            return {
+                base64: dataUrl.split(',')[1],
+                mimeType: 'image/jpeg',
+                previewUrl: dataUrl
+            };
+        };
+
+        try {
+            return tryDraw(imgEl);
+        } catch (_) {
+            if (!imgEl.src) throw new Error('Ảnh bị chặn CORS.');
+            const corsImg = new Image();
+            corsImg.crossOrigin = 'anonymous';
+            await new Promise((resolve, reject) => {
+                corsImg.onload = resolve;
+                corsImg.onerror = () => reject(new Error('Ảnh bị chặn CORS, không thể đọc pixel.'));
+                corsImg.src = imgEl.src;
+            });
+            return tryDraw(corsImg);
+        }
+    }
+
+    // Gọi Gemini OCR lấy toàn bộ chữ trong ảnh (kể cả ký tự đơn như chữ "T")
+    async function ocrImageWithGemini(apiKey, base64, mimeType) {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+        const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [
+                    {
+                        parts: [
+                            {
+                                text:
+                                    'Hãy đóng vai công cụ OCR chính xác tuyệt đối. Đọc toàn bộ chữ, ký tự hoặc số có trong hình ảnh này ' +
+                                    '(kể cả chỉ là một chữ cái đơn lẻ như "T"). Chỉ trả về đúng phần text trích xuất được, ' +
+                                    'giữ nguyên xuống dòng và thứ tự các bước nếu có, không thêm lời dẫn.'
+                            },
+                            {
+                                inline_data: {
+                                    mime_type: mimeType,
+                                    data: base64
+                                }
+                            }
+                        ]
+                    }
+                ]
+            })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+            throw new Error(data.error?.message || `Lỗi HTTP ${res.status}`);
+        }
+
+        return (
+            data.candidates?.[0]?.content?.parts
+                ?.map((p) => p.text || '')
+                .join('')
+                .trim() || ''
+        );
+    }
+
+    // Tự động tìm ảnh nổi bật/đang hiển thị trên trang để OCR
+    function findCandidateImages() {
+        const imgs = Array.from(document.querySelectorAll('img')).filter((img) => {
+            if (root.contains(img)) return false;
+            const rect = img.getBoundingClientRect();
+            const w = img.naturalWidth || rect.width;
+            const h = img.naturalHeight || rect.height;
+            const visible = rect.width > 20 && rect.height > 20 && getComputedStyle(img).display !== 'none';
+            return visible && w > 20 && h > 20;
+        });
+
+        // Ưu tiên ảnh nằm trong khung nhìn hiện tại và có diện tích lớn hơn
+        imgs.sort((a, b) => {
+            const ra = a.getBoundingClientRect();
+            const rb = b.getBoundingClientRect();
+            const inViewA = ra.top < window.innerHeight && ra.bottom > 0 ? 1 : 0;
+            const inViewB = rb.top < window.innerHeight && rb.bottom > 0 ? 1 : 0;
+            if (inViewA !== inViewB) return inViewB - inViewA;
+            return rb.width * rb.height - ra.width * ra.height;
+        });
+
+        return imgs;
+    }
+
+    // Nút VIP: Tự lấy ảnh trên trang -> chuyển sang text
+    autoOcrBtn.addEventListener('click', async () => {
+        const apiKey = apiKeyInput.value.trim();
+        if (!apiKey) {
+            statusMsg.textContent = 'Vui lòng nhập Gemini API Key trước.';
             return;
         }
 
-        promptInput.value = extracted;
-        statusMsg.textContent = selected
-            ? `Đã lấy ${extracted.length} ký tự text bôi đen.`
-            : `Đã đọc ${extracted.length} ký tự text từ trang.`;
+        const candidates = findCandidateImages();
+        if (!candidates.length) {
+            statusMsg.textContent = 'Không tìm thấy ảnh nào trên trang.';
+            return;
+        }
+
+        autoOcrBtn.disabled = true;
+        statusMsg.textContent = `Tìm thấy ${candidates.length} ảnh. Đang tự lấy ảnh và đọc chữ...`;
+
+        let lastError = '';
+        for (const img of candidates) {
+            try {
+                const converted = await imgElementToBase64(img);
+                imgPreview.src = converted.previewUrl;
+                imgPreview.classList.add('show');
+
+                const extractedText = await ocrImageWithGemini(apiKey, converted.base64, converted.mimeType);
+                textBox.value = extractedText || '(Ảnh không có chữ rõ ràng)';
+                statusMsg.textContent = extractedText
+                    ? `Đã lấy chữ từ ảnh thành công (${extractedText.length} ký tự).`
+                    : 'Đã đọc ảnh nhưng không thấy chữ.';
+                autoOcrBtn.disabled = false;
+                return;
+            } catch (err) {
+                lastError = err.message;
+            }
+        }
+
+        autoOcrBtn.disabled = false;
+        statusMsg.textContent = lastError || 'Không thể đọc ảnh trên trang này.';
     });
 
-    // 2. Chế độ bấm chọn 1 ảnh trên trang web
+    // Chế độ bấm chọn thủ công 1 ảnh rồi tự OCR sang text
     pickImgBtn.addEventListener('click', () => {
+        if (!apiKeyInput.value.trim()) {
+            statusMsg.textContent = 'Hãy nhập Gemini API Key trước khi chọn ảnh.';
+            return;
+        }
         pickingImage = true;
         setOpen(false);
-        statusMsg.textContent = 'Hãy chạm vào một bức ảnh trên trang web...';
+        statusMsg.textContent = 'Chạm vào 1 ảnh trên trang để tự chuyển sang text...';
     });
-
-    function imgElementToBase64(imgEl) {
-        return new Promise((resolve, reject) => {
-            try {
-                const canvas = document.createElement('canvas');
-                const w = imgEl.naturalWidth || imgEl.width;
-                const h = imgEl.naturalHeight || imgEl.height;
-                if (!w || !h) return reject(new Error('Ảnh chưa tải xong hoặc không có kích thước.'));
-
-                const maxSide = 1280;
-                const scale = Math.min(1, maxSide / Math.max(w, h));
-                canvas.width = Math.round(w * scale);
-                canvas.height = Math.round(h * scale);
-
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
-
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                const base64 = dataUrl.split(',')[1];
-                resolve({ base64, mimeType: 'image/jpeg', previewUrl: dataUrl });
-            } catch (err) {
-                reject(new Error('Ảnh bị chặn CORS nên không đọc trực tiếp được.'));
-            }
-        });
-    }
 
     document.addEventListener(
         'click',
@@ -334,15 +488,18 @@
             e.stopPropagation();
             pickingImage = false;
             setOpen(true);
-            statusMsg.textContent = 'Đang xử lý ảnh...';
+
+            const apiKey = apiKeyInput.value.trim();
+            statusMsg.textContent = 'Đang lấy ảnh và chuyển sang text...';
 
             try {
                 const converted = await imgElementToBase64(targetImg);
-                selectedImageBase64 = converted.base64;
-                selectedImageMime = converted.mimeType;
                 imgPreview.src = converted.previewUrl;
                 imgPreview.classList.add('show');
-                statusMsg.textContent = 'Đã chọn ảnh thành công. Nhấn "Phân tích & Giải thích".';
+
+                const extractedText = await ocrImageWithGemini(apiKey, converted.base64, converted.mimeType);
+                textBox.value = extractedText || '(Không đọc được chữ trong ảnh)';
+                statusMsg.textContent = 'Đã chuyển ảnh sang text thành công.';
             } catch (err) {
                 statusMsg.textContent = err.message;
             }
@@ -350,40 +507,74 @@
         true
     );
 
-    // 3. Gọi Gemini API để đọc text, phân tích ảnh và giải thích
+    // Tính năng VIP: Lọc các câu / đoạn bắt đầu bằng "Bước 1", "Bước 2", "Bước 3", "Bước 4", "Bước 5"...
+    function extractStepSentences(rawText) {
+        if (!rawText.trim()) return [];
+
+        // Tách theo xuống dòng hoặc dấu ngắt câu (. ! ?) nhưng giữ dấu ngắt đi kèm
+        const chunks = rawText
+            .split(/\r?\n|(?<=[.!?…])\s+/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+
+        // Khớp các câu/dòng có chứa "Bước 1", "Bước 2", "Bước 3", "Bước 4", "Bước 5"... (hoặc Step 1..)
+        const stepRegex = /(?:^|[\s\-–—:•*("“\[])(?:bước|step)\s*\d+\b/i;
+        const matched = [];
+        const seen = new Set();
+
+        for (const chunk of chunks) {
+            if (stepRegex.test(chunk)) {
+                // Nếu 1 dòng dài gộp nhiều bước, tách nhỏ theo từng "Bước <số>"
+                const subSteps = chunk.match(/(?:bước|step)\s*\d+\b[\s\S]*?(?=(?:(?:bước|step)\s*\d+\b)|$)/gi);
+                if (subSteps && subSteps.length > 1) {
+                    for (const sub of subSteps) {
+                        const clean = sub.trim();
+                        if (clean && !seen.has(clean)) {
+                            seen.add(clean);
+                            matched.push(clean);
+                        }
+                    }
+                } else if (!seen.has(chunk)) {
+                    seen.add(chunk);
+                    matched.push(chunk);
+                }
+            }
+        }
+
+        return matched;
+    }
+
+    filterStepsBtn.addEventListener('click', () => {
+        const source = textBox.value || document.body.innerText || '';
+        const steps = extractStepSentences(source);
+
+        if (!steps.length) {
+            stepBox.textContent = 'Không tìm thấy câu nào có "Bước 1, Bước 2, Bước 3, Bước 4, Bước 5...".';
+            statusMsg.textContent = 'Lọc bước hoàn tất: 0 kết quả.';
+            return;
+        }
+
+        stepBox.textContent = steps.join('\n\n');
+        statusMsg.textContent = `VIP đã lọc được ${steps.length} câu/mục có "Bước ...".`;
+    });
+
+    // Nút Giải thích nội dung hiện có
     explainBtn.addEventListener('click', async () => {
         const apiKey = apiKeyInput.value.trim();
-        const textContent = promptInput.value.trim();
+        const content = (textBox.value || stepBox.textContent || '').trim();
 
         if (!apiKey) {
             statusMsg.textContent = 'Vui lòng nhập Gemini API Key trước.';
             return;
         }
-        if (!textContent && !selectedImageBase64) {
-            statusMsg.textContent = 'Hãy bấm "Đọc text trang", chọn ảnh, hoặc nhập nội dung cần giải thích.';
+        if (!content) {
+            statusMsg.textContent = 'Chưa có text nào để giải thích.';
             return;
         }
 
-        localStorage.setItem(STORAGE_KEY, apiKey);
         explainBtn.disabled = true;
-        statusMsg.textContent = 'Đang phân tích và giải thích...';
+        statusMsg.textContent = 'Đang giải thích...';
         outputBox.textContent = 'Đang xử lý...';
-
-        const parts = [];
-        parts.push({
-            text:
-                'Hãy đọc kỹ nội dung (văn bản và/hoặc hình ảnh) được cung cấp, phân tích ý chính và giải thích rõ ràng, dễ hiểu bằng tiếng Việt.\n\n' +
-                (textContent ? `Nội dung văn bản:\n${textContent}` : 'Hãy phân tích hình ảnh đính kèm.')
-        });
-
-        if (selectedImageBase64 && selectedImageMime) {
-            parts.push({
-                inline_data: {
-                    mime_type: selectedImageMime,
-                    data: selectedImageBase64
-                }
-            });
-        }
 
         try {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
@@ -391,7 +582,15 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    contents: [{ parts }]
+                    contents: [
+                        {
+                            parts: [
+                                {
+                                    text: `Hãy đọc và giải thích rõ ràng, ngắn gọn, dễ hiểu bằng tiếng Việt nội dung sau:\n\n${content}`
+                                }
+                            ]
+                        }
+                    ]
                 })
             });
 
@@ -400,14 +599,12 @@
                 throw new Error(data.error?.message || `Lỗi HTTP ${res.status}`);
             }
 
-            const reply =
+            outputBox.textContent =
                 data.candidates?.[0]?.content?.parts
                     ?.map((p) => p.text || '')
                     .join('')
-                    .trim() || 'Không nhận được nội dung phản hồi.';
-
-            outputBox.textContent = reply;
-            statusMsg.textContent = 'Hoàn tất.';
+                    .trim() || 'Không có phản hồi.';
+            statusMsg.textContent = 'Giải thích xong.';
         } catch (err) {
             outputBox.textContent = 'Lỗi: ' + err.message;
             statusMsg.textContent = 'Có lỗi xảy ra.';
