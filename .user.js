@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Universal Floating UI & Menu
+// @name         Universal UI - Read Text, Image & Explain
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Nút mở UI chính hiển thị trên mọi trang web
+// @version      2.0
+// @description  Đọc text trang web, phân tích ảnh và giải thích ngay trên UI nổi
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,8 +10,9 @@
 (function () {
     'use strict';
 
-    // Tránh chèn trùng nếu trang web chạy lại script
     if (document.getElementById('custom-ui-root')) return;
+
+    const STORAGE_KEY = 'tm_gemini_api_key_v1';
 
     const root = document.createElement('div');
     root.id = 'custom-ui-root';
@@ -24,7 +25,6 @@
     root.style.height = '0';
     document.documentElement.appendChild(root);
 
-    // Dùng Shadow DOM để CSS của trang web không làm hỏng giao diện UI của bạn
     const shadow = root.attachShadow({ mode: 'open' });
 
     shadow.innerHTML = `
@@ -59,19 +59,21 @@
                 position: fixed;
                 bottom: 84px;
                 right: 20px;
-                width: 320px;
+                width: 350px;
                 max-width: calc(100vw - 32px);
+                max-height: calc(100vh - 110px);
                 background: #111114;
                 color: #f4f4f5;
                 border: 1px solid rgba(255, 255, 255, 0.12);
                 border-radius: 14px;
                 box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
                 font-family: system-ui, -apple-system, sans-serif;
-                overflow: hidden;
                 display: none;
+                flex-direction: column;
+                overflow: hidden;
             }
             .main-ui.open {
-                display: block;
+                display: flex;
             }
             .ui-header {
                 display: flex;
@@ -98,34 +100,80 @@
                 color: #ffffff;
             }
             .ui-body {
-                padding: 14px;
+                padding: 12px 14px;
                 display: flex;
                 flex-direction: column;
-                gap: 10px;
+                gap: 9px;
+                overflow-y: auto;
             }
-            .ui-info {
+            .row {
+                display: flex;
+                gap: 8px;
+            }
+            .input, .textarea {
+                width: 100%;
+                box-sizing: border-box;
+                border-radius: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.14);
+                background: #18181c;
+                color: #f4f4f5;
                 font-size: 12px;
-                color: #a1a1aa;
-                word-break: break-all;
+                font-family: system-ui, -apple-system, sans-serif;
+                padding: 8px 10px;
+                outline: none;
+            }
+            .textarea {
+                min-height: 78px;
+                resize: vertical;
             }
             .ui-btn {
-                width: 100%;
-                padding: 9px 12px;
+                flex: 1;
+                padding: 8px 10px;
                 border-radius: 8px;
                 border: 1px solid rgba(255, 255, 255, 0.14);
                 background: #27272a;
                 color: #ffffff;
-                font-size: 13px;
+                font-size: 12px;
                 font-weight: 600;
                 cursor: pointer;
             }
             .ui-btn:hover {
                 background: #3f3f46;
             }
-            .status-msg {
+            .ui-btn.primary {
+                background: #2563eb;
+                border-color: #3b82f6;
+            }
+            .ui-btn.primary:hover {
+                background: #1d4ed8;
+            }
+            .output-box {
+                background: #0b0b0d;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                padding: 10px;
                 font-size: 12px;
-                color: #4ade80;
-                min-height: 16px;
+                line-height: 1.5;
+                color: #e4e4e7;
+                white-space: pre-wrap;
+                max-height: 220px;
+                overflow-y: auto;
+            }
+            .status-msg {
+                font-size: 11px;
+                color: #93c5fd;
+                min-height: 15px;
+            }
+            .img-preview {
+                max-width: 100%;
+                max-height: 120px;
+                border-radius: 8px;
+                object-fit: contain;
+                background: #18181c;
+                display: none;
+            }
+            .img-preview.show {
+                display: block;
             }
         </style>
 
@@ -133,13 +181,25 @@
 
         <div class="main-ui" id="mainUi">
             <div class="ui-header">
-                <span class="ui-title">UI Chính</span>
+                <span class="ui-title">Đọc & Giải Thích</span>
                 <button class="ui-close" id="closeBtn">&times;</button>
             </div>
             <div class="ui-body">
-                <div class="ui-info" id="siteInfo"></div>
-                <button class="ui-btn" id="actionBtn">Chạy chức năng mẫu</button>
-                <div class="status-msg" id="statusMsg"></div>
+                <input class="input" type="password" id="apiKeyInput" placeholder="Dán Gemini API Key tại đây..." />
+
+                <div class="row">
+                    <button class="ui-btn" id="readTextBtn">Đọc text trang</button>
+                    <button class="ui-btn" id="pickImgBtn">Chọn ảnh trên web</button>
+                </div>
+
+                <img class="img-preview" id="imgPreview" alt="Ảnh đã chọn" />
+
+                <textarea class="textarea" id="promptInput" placeholder="Nội dung text hoặc câu hỏi cần giải thích..."></textarea>
+
+                <button class="ui-btn primary" id="explainBtn">Phân tích & Giải thích</button>
+
+                <div class="status-msg" id="statusMsg">Sẵn sàng.</div>
+                <div class="output-box" id="outputBox">Kết quả giải thích sẽ hiển thị ở đây.</div>
             </div>
         </div>
     `;
@@ -147,11 +207,25 @@
     const toggleBtn = shadow.getElementById('toggleBtn');
     const mainUi = shadow.getElementById('mainUi');
     const closeBtn = shadow.getElementById('closeBtn');
-    const actionBtn = shadow.getElementById('actionBtn');
+    const apiKeyInput = shadow.getElementById('apiKeyInput');
+    const readTextBtn = shadow.getElementById('readTextBtn');
+    const pickImgBtn = shadow.getElementById('pickImgBtn');
+    const imgPreview = shadow.getElementById('imgPreview');
+    const promptInput = shadow.getElementById('promptInput');
+    const explainBtn = shadow.getElementById('explainBtn');
     const statusMsg = shadow.getElementById('statusMsg');
-    const siteInfo = shadow.getElementById('siteInfo');
+    const outputBox = shadow.getElementById('outputBox');
 
-    siteInfo.textContent = 'Trang hiện tại: ' + location.hostname;
+    let selectedImageBase64 = null;
+    let selectedImageMime = null;
+    let pickingImage = false;
+
+    const savedKey = localStorage.getItem(STORAGE_KEY);
+    if (savedKey) apiKeyInput.value = savedKey;
+
+    apiKeyInput.addEventListener('change', () => {
+        localStorage.setItem(STORAGE_KEY, apiKeyInput.value.trim());
+    });
 
     let isOpen = false;
     function setOpen(state) {
@@ -200,7 +274,145 @@
         }
     });
 
-    actionBtn.addEventListener('click', () => {
-        statusMsg.textContent = 'Đã kích hoạt lúc ' + new Date().toLocaleTimeString();
+    // 1. Đọc text đang bôi đen hoặc text chính trên trang
+    readTextBtn.addEventListener('click', () => {
+        const selected = window.getSelection ? window.getSelection().toString().trim() : '';
+        const bodyText = (document.body.innerText || '').replace(/\s+/g, ' ').trim();
+        const extracted = selected || bodyText.slice(0, 2500);
+
+        if (!extracted) {
+            statusMsg.textContent = 'Không tìm thấy text nào trên trang.';
+            return;
+        }
+
+        promptInput.value = extracted;
+        statusMsg.textContent = selected
+            ? `Đã lấy ${extracted.length} ký tự text bôi đen.`
+            : `Đã đọc ${extracted.length} ký tự text từ trang.`;
+    });
+
+    // 2. Chế độ bấm chọn 1 ảnh trên trang web
+    pickImgBtn.addEventListener('click', () => {
+        pickingImage = true;
+        setOpen(false);
+        statusMsg.textContent = 'Hãy chạm vào một bức ảnh trên trang web...';
+    });
+
+    function imgElementToBase64(imgEl) {
+        return new Promise((resolve, reject) => {
+            try {
+                const canvas = document.createElement('canvas');
+                const w = imgEl.naturalWidth || imgEl.width;
+                const h = imgEl.naturalHeight || imgEl.height;
+                if (!w || !h) return reject(new Error('Ảnh chưa tải xong hoặc không có kích thước.'));
+
+                const maxSide = 1280;
+                const scale = Math.min(1, maxSide / Math.max(w, h));
+                canvas.width = Math.round(w * scale);
+                canvas.height = Math.round(h * scale);
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(imgEl, 0, 0, canvas.width, canvas.height);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                const base64 = dataUrl.split(',')[1];
+                resolve({ base64, mimeType: 'image/jpeg', previewUrl: dataUrl });
+            } catch (err) {
+                reject(new Error('Ảnh bị chặn CORS nên không đọc trực tiếp được.'));
+            }
+        });
+    }
+
+    document.addEventListener(
+        'click',
+        async (e) => {
+            if (!pickingImage) return;
+            const targetImg = e.target && e.target.closest ? e.target.closest('img') : null;
+            if (!targetImg) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+            pickingImage = false;
+            setOpen(true);
+            statusMsg.textContent = 'Đang xử lý ảnh...';
+
+            try {
+                const converted = await imgElementToBase64(targetImg);
+                selectedImageBase64 = converted.base64;
+                selectedImageMime = converted.mimeType;
+                imgPreview.src = converted.previewUrl;
+                imgPreview.classList.add('show');
+                statusMsg.textContent = 'Đã chọn ảnh thành công. Nhấn "Phân tích & Giải thích".';
+            } catch (err) {
+                statusMsg.textContent = err.message;
+            }
+        },
+        true
+    );
+
+    // 3. Gọi Gemini API để đọc text, phân tích ảnh và giải thích
+    explainBtn.addEventListener('click', async () => {
+        const apiKey = apiKeyInput.value.trim();
+        const textContent = promptInput.value.trim();
+
+        if (!apiKey) {
+            statusMsg.textContent = 'Vui lòng nhập Gemini API Key trước.';
+            return;
+        }
+        if (!textContent && !selectedImageBase64) {
+            statusMsg.textContent = 'Hãy bấm "Đọc text trang", chọn ảnh, hoặc nhập nội dung cần giải thích.';
+            return;
+        }
+
+        localStorage.setItem(STORAGE_KEY, apiKey);
+        explainBtn.disabled = true;
+        statusMsg.textContent = 'Đang phân tích và giải thích...';
+        outputBox.textContent = 'Đang xử lý...';
+
+        const parts = [];
+        parts.push({
+            text:
+                'Hãy đọc kỹ nội dung (văn bản và/hoặc hình ảnh) được cung cấp, phân tích ý chính và giải thích rõ ràng, dễ hiểu bằng tiếng Việt.\n\n' +
+                (textContent ? `Nội dung văn bản:\n${textContent}` : 'Hãy phân tích hình ảnh đính kèm.')
+        });
+
+        if (selectedImageBase64 && selectedImageMime) {
+            parts.push({
+                inline_data: {
+                    mime_type: selectedImageMime,
+                    data: selectedImageBase64
+                }
+            });
+        }
+
+        try {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts }]
+                })
+            });
+
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error?.message || `Lỗi HTTP ${res.status}`);
+            }
+
+            const reply =
+                data.candidates?.[0]?.content?.parts
+                    ?.map((p) => p.text || '')
+                    .join('')
+                    .trim() || 'Không nhận được nội dung phản hồi.';
+
+            outputBox.textContent = reply;
+            statusMsg.textContent = 'Hoàn tất.';
+        } catch (err) {
+            outputBox.textContent = 'Lỗi: ' + err.message;
+            statusMsg.textContent = 'Có lỗi xảy ra.';
+        } finally {
+            explainBtn.disabled = false;
+        }
     });
 })();
