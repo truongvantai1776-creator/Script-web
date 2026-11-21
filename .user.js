@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Browser Frame Wrapper & Full Code UI
+// @name         Main UI Frame & Full Code
 // @namespace    http://tampermonkey.net/
-// @version      2.2
-// @description  Khung điều khiển kiểu thanh địa chỉ quanh iframe, mở tab mới khi bị chặn nhúng và lấy full code trang hiện tại
+// @version      2.4
+// @description  Mở ngay trong UI chính bằng iframe (kèm nút mở tab mới nếu trang chặn nhúng), nút T HUB và lấy full code trang hiện tại
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,10 +10,10 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self || document.getElementById("browser-wrapper-ui")) return;
+  if (window.top !== window.self || document.getElementById("main-ui-frame-script")) return;
 
   const root = document.createElement("div");
-  root.id = "browser-wrapper-ui";
+  root.id = "main-ui-frame-script";
   root.style.cssText = `
     position: fixed;
     bottom: 18px;
@@ -25,8 +25,8 @@
   `;
 
   root.innerHTML = `
-    <button id="bw-toggle-btn" type="button" style="
-      background: #0ea5e9;
+    <button id="mu-toggle-btn" type="button" style="
+      background: #2563eb;
       color: #ffffff;
       border: none;
       border-radius: 999px;
@@ -36,12 +36,12 @@
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     ">Mở UI</button>
 
-    <div id="bw-panel" style="
+    <div id="mu-panel" style="
       display: none;
       margin-top: 8px;
-      width: 380px;
+      width: 370px;
       max-width: 94vw;
-      max-height: 86vh;
+      max-height: 85vh;
       overflow-y: auto;
       background: #0f172a;
       border: 1px solid #334155;
@@ -50,8 +50,8 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <strong>Khung iFrame & Full Code</strong>
-        <button id="bw-close-btn" type="button" style="
+        <strong>UI Chính & Full Code</strong>
+        <button id="mu-close-btn" type="button" style="
           background: transparent;
           color: #94a3b8;
           border: 1px solid #334155;
@@ -62,52 +62,46 @@
       </div>
 
       <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-        <div style="display:flex;gap:4px;margin-bottom:6px;">
-          <button id="bw-back-btn" type="button" title="Lùi" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">←</button>
-          <button id="bw-forward-btn" type="button" title="Tới" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">→</button>
-          <button id="bw-reload-btn" type="button" title="Tải lại khung" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">↻</button>
-          <input id="bw-url-input" type="text" placeholder="Nhập URL (vd: https://example.com)..." style="
-            flex:1;min-width:0;padding:5px 8px;border-radius:6px;
-            border:1px solid #475569;background:#0f172a;color:#fff;
-          " />
-          <button id="bw-go-btn" type="button" style="
-            background:#16a34a;color:#fff;border:none;border-radius:6px;
-            padding:5px 10px;cursor:pointer;font-weight:600;
-          ">Tải</button>
-        </div>
-
-        <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="bw-thub-btn" type="button" style="
-            background:#0284c7;color:#fff;border:none;border-radius:6px;
-            padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;
-          ">Copy "T HUB"</button>
-          <button id="bw-ext-btn" type="button" style="
+        <div style="font-weight:600;margin-bottom:6px;">Mở Ngay Trong UI Chính</div>
+        <input id="mu-input" type="text" placeholder="Nhập từ khóa hoặc URL..." style="
+          width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:6px;
+          border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;
+        " />
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+          <button id="mu-open-ui-btn" type="button" style="
+            flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;
+            padding:6px 10px;cursor:pointer;font-weight:600;
+          ">Mở trong UI</button>
+          <button id="mu-open-tab-btn" type="button" style="
             background:#334155;color:#fff;border:none;border-radius:6px;
-            padding:5px 9px;cursor:pointer;font-size:12px;
+            padding:6px 10px;cursor:pointer;font-weight:600;
           ">Mở tab mới</button>
+          <button id="mu-thub-btn" type="button" style="
+            background:#0284c7;color:#fff;border:none;border-radius:6px;
+            padding:6px 10px;cursor:pointer;font-weight:600;
+          ">T HUB</button>
         </div>
-
-        <iframe id="bw-frame" src="about:blank" style="
+        <iframe id="mu-frame" src="about:blank" style="
           width:100%;height:220px;border:1px solid #475569;border-radius:6px;background:#ffffff;
         "></iframe>
         <div style="font-size:11px;color:#94a3b8;margin-top:4px;">
-          Lưu ý: đây chỉ là thẻ iframe; nhiều trang chặn nhúng sẽ hiện trống hoặc báo từ chối kết nối.
+          Nếu trang đích (như Google) chặn nhúng iframe, khung sẽ không hiển thị — dùng nút "Mở tab mới" để mở trực tiếp.
         </div>
       </div>
 
       <div style="background:#1e293b;padding:8px;border-radius:8px;">
         <div style="font-weight:600;margin-bottom:6px;">Full Code Trang Hiện Tại</div>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="bw-get-code" type="button" style="
+          <button id="mu-get-code" type="button" style="
             background:#0284c7;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Lấy Full Code</button>
-          <button id="bw-copy-code" type="button" style="
+          <button id="mu-copy-code" type="button" style="
             background:#475569;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Copy</button>
         </div>
-        <textarea id="bw-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
+        <textarea id="mu-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
           width:100%;box-sizing:border-box;background:#020617;color:#e2e8f0;
           border:1px solid #334155;border-radius:6px;padding:6px;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
@@ -118,34 +112,31 @@
 
   document.body.appendChild(root);
 
-  const toggleBtn = document.getElementById("bw-toggle-btn");
-  const closeBtn = document.getElementById("bw-close-btn");
-  const panel = document.getElementById("bw-panel");
-  const backBtn = document.getElementById("bw-back-btn");
-  const forwardBtn = document.getElementById("bw-forward-btn");
-  const reloadBtn = document.getElementById("bw-reload-btn");
-  const urlInput = document.getElementById("bw-url-input");
-  const goBtn = document.getElementById("bw-go-btn");
-  const thubBtn = document.getElementById("bw-thub-btn");
-  const extBtn = document.getElementById("bw-ext-btn");
-  const frame = document.getElementById("bw-frame");
-  const getCodeBtn = document.getElementById("bw-get-code");
-  const copyCodeBtn = document.getElementById("bw-copy-code");
-  const codeArea = document.getElementById("bw-code-area");
+  const toggleBtn = document.getElementById("mu-toggle-btn");
+  const closeBtn = document.getElementById("mu-close-btn");
+  const panel = document.getElementById("mu-panel");
+  const input = document.getElementById("mu-input");
+  const openUiBtn = document.getElementById("mu-open-ui-btn");
+  const openTabBtn = document.getElementById("mu-open-tab-btn");
+  const thubBtn = document.getElementById("mu-thub-btn");
+  const frame = document.getElementById("mu-frame");
+  const getCodeBtn = document.getElementById("mu-get-code");
+  const copyCodeBtn = document.getElementById("mu-copy-code");
+  const codeArea = document.getElementById("mu-code-area");
 
   function setOpen(open) {
     panel.style.display = open ? "block" : "none";
     toggleBtn.textContent = open ? "Ẩn UI" : "Mở UI";
   }
 
-  function normalizeUrl(raw) {
+  function buildUrl(raw) {
     const text = (raw || "").trim();
-    if (!text) return "";
+    if (!text) return "https://www.google.com/";
     if (/^https?:\/\//i.test(text)) return text;
     if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text)) {
       return "https://" + text;
     }
-    return "";
+    return "https://www.google.com/search?q=" + encodeURIComponent(text);
   }
 
   async function copyText(str) {
@@ -164,50 +155,25 @@
   toggleBtn.addEventListener("click", () => setOpen(panel.style.display !== "block"));
   closeBtn.addEventListener("click", () => setOpen(false));
 
-  goBtn.addEventListener("click", () => {
-    const url = normalizeUrl(urlInput.value);
-    if (url) frame.src = url;
+  openUiBtn.addEventListener("click", () => {
+    frame.src = buildUrl(input.value);
   });
 
-  urlInput.addEventListener("keydown", (e) => {
+  input.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const url = normalizeUrl(urlInput.value);
-      if (url) frame.src = url;
+      frame.src = buildUrl(input.value);
     }
   });
 
-  backBtn.addEventListener("click", () => {
-    try {
-      frame.contentWindow.history.back();
-    } catch {}
-  });
-
-  forwardBtn.addEventListener("click", () => {
-    try {
-      frame.contentWindow.history.forward();
-    } catch {}
-  });
-
-  reloadBtn.addEventListener("click", () => {
-    try {
-      frame.contentWindow.location.reload();
-    } catch {
-      frame.src = frame.src;
-    }
-  });
-
-  extBtn.addEventListener("click", () => {
-    const url = normalizeUrl(urlInput.value) || frame.src;
-    if (url && url !== "about:blank") {
-      window.open(url, "_blank", "noopener,noreferrer");
-    }
+  openTabBtn.addEventListener("click", () => {
+    window.open(buildUrl(input.value), "_blank", "noopener,noreferrer");
   });
 
   thubBtn.addEventListener("click", async () => {
+    input.value = "T HUB";
     await copyText("T HUB");
-    thubBtn.textContent = 'Đã copy "T HUB"';
-    setTimeout(() => (thubBtn.textContent = 'Copy "T HUB"'), 1200);
+    frame.src = buildUrl("T HUB");
   });
 
   getCodeBtn.addEventListener("click", () => {
