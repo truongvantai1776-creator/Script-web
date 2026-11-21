@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Safari Mode UI & Full Code
+// @name         Parallel UI Search & Quick Tab Opener
 // @namespace    http://tampermonkey.net/
-// @version      1.5
-// @description  Chuyển chế độ mặc định sang Safari, xem kết quả ngay trong UI hoặc mở tab mới, và lấy full code trang hiện tại
+// @version      1.6
+// @description  Nút mở tab mới có sẵn từ khóa (như T HUB), tìm song song 2 khung trên UI và lấy full code trang hiện tại
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,10 +10,10 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self || document.getElementById("safari-mode-ui-root")) return;
+  if (window.top !== window.self || document.getElementById("parallel-ui-root")) return;
 
   const root = document.createElement("div");
-  root.id = "safari-mode-ui-root";
+  root.id = "parallel-ui-root";
   root.style.cssText = `
     position: fixed;
     bottom: 18px;
@@ -25,7 +25,7 @@
   `;
 
   root.innerHTML = `
-    <button id="sf-toggle-btn" type="button" style="
+    <button id="pu-toggle-btn" type="button" style="
       background: #0ea5e9;
       color: #ffffff;
       border: none;
@@ -34,13 +34,14 @@
       font-weight: 600;
       cursor: pointer;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-    ">Mở UI (Safari)</button>
+    ">Mở UI</button>
 
-    <div id="sf-panel" style="
+    <div id="pu-panel" style="
       display: none;
       margin-top: 8px;
-      width: 360px;
-      max-height: 85vh;
+      width: 420px;
+      max-width: 94vw;
+      max-height: 86vh;
       overflow-y: auto;
       background: #0f172a;
       border: 1px solid #334155;
@@ -49,8 +50,8 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <strong>Safari UI & Full Code</strong>
-        <button id="sf-close-btn" type="button" style="
+        <strong>UI Tìm Song Song & Tab Nhanh</strong>
+        <button id="pu-close-btn" type="button" style="
           background: transparent;
           color: #94a3b8;
           border: 1px solid #334155;
@@ -60,72 +61,69 @@
         ">Đóng</button>
       </div>
 
-      <!-- Ô nhập từ khóa / URL với chế độ mặc định Safari -->
+      <!-- Nút nhanh mở tab mới với từ khóa có sẵn -->
       <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-        <div style="font-weight:600;margin-bottom:6px;">Chế độ hiện tại: <span style="color:#38bdf8;">Safari</span></div>
-        <input id="sf-query-input" type="text" placeholder="Nhập từ khóa hoặc địa chỉ web..." style="
-          width:100%;box-sizing:border-box;padding:7px 9px;
+        <div style="font-weight:600;margin-bottom:6px;">Mở Tab Mới Có Sẵn Từ Khóa</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="pu-quick-thub" type="button" style="
+            background:#2563eb;color:#fff;border:none;border-radius:6px;
+            padding:6px 12px;cursor:pointer;font-weight:600;
+          ">T HUB (Mở Tab Mới)</button>
+          <button id="pu-quick-thub-ui" type="button" style="
+            background:#0d9488;color:#fff;border:none;border-radius:6px;
+            padding:6px 12px;cursor:pointer;font-weight:600;
+          ">T HUB (Xem Trong UI)</button>
+        </div>
+      </div>
+
+      <!-- Tìm kiếm đa khung song song trên UI -->
+      <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
+        <div style="font-weight:600;margin-bottom:6px;">Tìm Trên UI Song Song (2 Khung)</div>
+        <input id="pu-search-input" type="text" placeholder="Nhập từ khóa hoặc URL để tải 2 khung song song..." style="
+          width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:6px;
           border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;
         " />
-
-        <div id="sf-picker" style="
-          display: none;
-          margin-top: 8px;
-          padding: 8px;
-          background: #0f172a;
-          border: 1px solid #334155;
-          border-radius: 8px;
-        ">
-          <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">
-            Trình duyệt: <strong id="sf-browser-label" style="color:#38bdf8;">Safari</strong> — <span id="sf-preview-text" style="color:#e2e8f0;"></span>
-          </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
-            <button class="sf-browser-btn" data-browser="safari" type="button" style="
-              flex:1;background:#0ea5e9;color:#fff;border:none;border-radius:6px;
-              padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;
-            ">Safari</button>
-            <button class="sf-browser-btn" data-browser="duckduckgo" type="button" style="
-              flex:1;background:#0d9488;color:#fff;border:none;border-radius:6px;
-              padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;
-            ">DuckGo</button>
-            <button class="sf-browser-btn" data-browser="bing" type="button" style="
-              flex:1;background:#334155;color:#fff;border:none;border-radius:6px;
-              padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;
-            ">Bing</button>
-          </div>
-          <div style="display:flex;gap:6px;">
-            <button id="sf-view-in-ui" type="button" style="
-              flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;
-              padding:7px 10px;cursor:pointer;font-size:12px;font-weight:600;
-            ">Xem trong UI</button>
-            <button id="sf-open-tab" type="button" style="
-              background:#2563eb;color:#fff;border:none;border-radius:6px;
-              padding:7px 10px;cursor:pointer;font-size:12px;font-weight:600;
-            ">Mở tab Safari</button>
-          </div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <button id="pu-run-parallel" type="button" style="
+            flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;
+            padding:6px 10px;cursor:pointer;font-weight:600;
+          ">Chạy Song Song Trong UI</button>
+          <button id="pu-open-tab-query" type="button" style="
+            background:#334155;color:#fff;border:none;border-radius:6px;
+            padding:6px 10px;cursor:pointer;
+          ">Mở Tab Mới</button>
         </div>
 
-        <div id="sf-status" style="font-size:11px;color:#94a3b8;margin-top:6px;">Sẵn sàng ở chế độ Safari.</div>
-        <iframe id="sf-frame" src="about:blank" style="
-          width:100%;height:220px;margin-top:6px;border:1px solid #475569;
-          border-radius:6px;background:#ffffff;
-        "></iframe>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
+          <div>
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:3px;">Khung 1 (DuckDuckGo)</div>
+            <iframe id="pu-frame-1" src="about:blank" style="
+              width:100%;height:190px;border:1px solid #475569;border-radius:6px;background:#fff;
+            "></iframe>
+          </div>
+          <div>
+            <div style="font-size:11px;color:#94a3b8;margin-bottom:3px;">Khung 2 (Bing / URL)</div>
+            <iframe id="pu-frame-2" src="about:blank" style="
+              width:100%;height:190px;border:1px solid #475569;border-radius:6px;background:#fff;
+            "></iframe>
+          </div>
+        </div>
       </div>
 
       <!-- Lấy Full Code trang hiện tại -->
       <div style="background:#1e293b;padding:8px;border-radius:8px;">
         <div style="font-weight:600;margin-bottom:6px;">Full Code Trang Hiện Tại</div>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="sf-get-code" type="button" style="
+          <button id="pu-get-code" type="button" style="
             background:#0284c7;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Lấy Full Code</button>
-          <button id="sf-copy-code" type="button" style="
+          <button id="pu-copy-code" type="button" style="
             background:#475569;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Copy</button>
         </div>
-        <textarea id="sf-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
+        <textarea id="pu-code-area" rows="6" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
           width:100%;box-sizing:border-box;background:#020617;color:#e2e8f0;
           border:1px solid #334155;border-radius:6px;padding:6px;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
@@ -136,97 +134,72 @@
 
   document.body.appendChild(root);
 
-  const toggleBtn = document.getElementById("sf-toggle-btn");
-  const closeBtn = document.getElementById("sf-close-btn");
-  const panel = document.getElementById("sf-panel");
-  const queryInput = document.getElementById("sf-query-input");
-  const picker = document.getElementById("sf-picker");
-  const browserLabel = document.getElementById("sf-browser-label");
-  const previewText = document.getElementById("sf-preview-text");
-  const viewInUiBtn = document.getElementById("sf-view-in-ui");
-  const openTabBtn = document.getElementById("sf-open-tab");
-  const statusEl = document.getElementById("sf-status");
-  const frame = document.getElementById("sf-frame");
-  const getCodeBtn = document.getElementById("sf-get-code");
-  const copyCodeBtn = document.getElementById("sf-copy-code");
-  const codeArea = document.getElementById("sf-code-area");
-
-  let currentBrowser = "safari";
-
-  const browserNames = {
-    safari: "Safari",
-    duckduckgo: "DuckDuckGo",
-    bing: "Bing"
-  };
-
-  function buildUrl(raw, browser) {
-    const text = (raw || "").trim();
-    if (!text) return "";
-
-    if (/^https?:\/\//i.test(text)) return text;
-    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text)) {
-      return "https://" + text;
-    }
-
-    const encoded = encodeURIComponent(text);
-    if (browser === "bing") {
-      return `https://www.bing.com/search?q=${encoded}`;
-    }
-    if (browser === "duckduckgo") {
-      return `https://html.duckduckgo.com/html/?q=${encoded}`;
-    }
-    return `https://html.duckduckgo.com/html/?q=${encoded}`;
-  }
-
-  function refreshPicker() {
-    const val = queryInput.value.trim();
-    if (val.length > 0) {
-      picker.style.display = "block";
-      previewText.textContent = val;
-      browserLabel.textContent = browserNames[currentBrowser] || "Safari";
-    } else {
-      picker.style.display = "none";
-      previewText.textContent = "";
-    }
-  }
-
-  function loadInsideUi() {
-    const targetUrl = buildUrl(queryInput.value, currentBrowser);
-    if (!targetUrl) return;
-    frame.src = targetUrl;
-    statusEl.textContent = `[${browserNames[currentBrowser]}] Đang tải trong UI: ${targetUrl}`;
-    frame.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
+  const toggleBtn = document.getElementById("pu-toggle-btn");
+  const closeBtn = document.getElementById("pu-close-btn");
+  const panel = document.getElementById("pu-panel");
+  const quickThubBtn = document.getElementById("pu-quick-thub");
+  const quickThubUiBtn = document.getElementById("pu-quick-thub-ui");
+  const searchInput = document.getElementById("pu-search-input");
+  const runParallelBtn = document.getElementById("pu-run-parallel");
+  const openTabQueryBtn = document.getElementById("pu-open-tab-query");
+  const frame1 = document.getElementById("pu-frame-1");
+  const frame2 = document.getElementById("pu-frame-2");
+  const getCodeBtn = document.getElementById("pu-get-code");
+  const copyCodeBtn = document.getElementById("pu-copy-code");
+  const codeArea = document.getElementById("pu-code-area");
 
   function setOpen(open) {
     panel.style.display = open ? "block" : "none";
-    toggleBtn.textContent = open ? "Ẩn UI (Safari)" : "Mở UI (Safari)";
+    toggleBtn.textContent = open ? "Ẩn UI" : "Mở UI";
+  }
+
+  function openSearchNewTab(keyword) {
+    const q = encodeURIComponent((keyword || "").trim());
+    if (!q) return;
+    window.open(`https://duckduckgo.com/?q=${q}`, "_blank", "noopener,noreferrer");
+  }
+
+  function runParallelInUi(raw) {
+    const text = (raw || "").trim();
+    if (!text) return;
+
+    if (/^https?:\/\//i.test(text) || (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text))) {
+      const url = /^https?:\/\//i.test(text) ? text : "https://" + text;
+      frame1.src = url;
+      frame2.src = `https://www.bing.com/search?q=${encodeURIComponent(text)}`;
+      return;
+    }
+
+    const encoded = encodeURIComponent(text);
+    frame1.src = `https://html.duckduckgo.com/html/?q=${encoded}`;
+    frame2.src = `https://www.bing.com/search?q=${encoded}`;
   }
 
   toggleBtn.addEventListener("click", () => setOpen(panel.style.display !== "block"));
   closeBtn.addEventListener("click", () => setOpen(false));
-  queryInput.addEventListener("input", refreshPicker);
 
-  queryInput.addEventListener("keydown", (e) => {
+  quickThubBtn.addEventListener("click", () => {
+    openSearchNewTab("T HUB");
+  });
+
+  quickThubUiBtn.addEventListener("click", () => {
+    searchInput.value = "T HUB";
+    runParallelInUi("T HUB");
+  });
+
+  runParallelBtn.addEventListener("click", () => {
+    runParallelInUi(searchInput.value);
+  });
+
+  searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      loadInsideUi();
+      runParallelInUi(searchInput.value);
     }
   });
 
-  document.querySelectorAll(".sf-browser-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      currentBrowser = btn.getAttribute("data-browser") || "safari";
-      refreshPicker();
-      loadInsideUi();
-    });
-  });
-
-  viewInUiBtn.addEventListener("click", loadInsideUi);
-
-  openTabBtn.addEventListener("click", () => {
-    const targetUrl = buildUrl(queryInput.value, currentBrowser);
-    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+  openTabQueryBtn.addEventListener("click", () => {
+    openSearchNewTab(searchInput.value);
   });
 
   getCodeBtn.addEventListener("click", () => {
