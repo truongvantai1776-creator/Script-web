@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Parallel UI Search & Quick Tab Opener
+// @name         Clean New Tab & Full Code UI
 // @namespace    http://tampermonkey.net/
-// @version      1.6
-// @description  Nút mở tab mới có sẵn từ khóa (như T HUB), tìm song song 2 khung trên UI và lấy full code trang hiện tại
+// @version      1.8
+// @description  Mở tab mới không gắn sẵn trang tìm kiếm ngoài, hỗ trợ copy nhanh T HUB và lấy full code trang hiện tại
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,10 +10,10 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self || document.getElementById("parallel-ui-root")) return;
+  if (window.top !== window.self || document.getElementById("clean-newtab-ui")) return;
 
   const root = document.createElement("div");
-  root.id = "parallel-ui-root";
+  root.id = "clean-newtab-ui";
   root.style.cssText = `
     position: fixed;
     bottom: 18px;
@@ -25,8 +25,8 @@
   `;
 
   root.innerHTML = `
-    <button id="pu-toggle-btn" type="button" style="
-      background: #0ea5e9;
+    <button id="cn-toggle-btn" type="button" style="
+      background: #2563eb;
       color: #ffffff;
       border: none;
       border-radius: 999px;
@@ -36,12 +36,11 @@
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     ">Mở UI</button>
 
-    <div id="pu-panel" style="
+    <div id="cn-panel" style="
       display: none;
       margin-top: 8px;
-      width: 420px;
-      max-width: 94vw;
-      max-height: 86vh;
+      width: 350px;
+      max-height: 84vh;
       overflow-y: auto;
       background: #0f172a;
       border: 1px solid #334155;
@@ -50,8 +49,8 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <strong>UI Tìm Song Song & Tab Nhanh</strong>
-        <button id="pu-close-btn" type="button" style="
+        <strong>Tab Mới & Full Code</strong>
+        <button id="cn-close-btn" type="button" style="
           background: transparent;
           color: #94a3b8;
           border: 1px solid #334155;
@@ -61,69 +60,40 @@
         ">Đóng</button>
       </div>
 
-      <!-- Nút nhanh mở tab mới với từ khóa có sẵn -->
       <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-        <div style="font-weight:600;margin-bottom:6px;">Mở Tab Mới Có Sẵn Từ Khóa</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button id="pu-quick-thub" type="button" style="
-            background:#2563eb;color:#fff;border:none;border-radius:6px;
-            padding:6px 12px;cursor:pointer;font-weight:600;
-          ">T HUB (Mở Tab Mới)</button>
-          <button id="pu-quick-thub-ui" type="button" style="
-            background:#0d9488;color:#fff;border:none;border-radius:6px;
-            padding:6px 12px;cursor:pointer;font-weight:600;
-          ">T HUB (Xem Trong UI)</button>
-        </div>
-      </div>
-
-      <!-- Tìm kiếm đa khung song song trên UI -->
-      <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-        <div style="font-weight:600;margin-bottom:6px;">Tìm Trên UI Song Song (2 Khung)</div>
-        <input id="pu-search-input" type="text" placeholder="Nhập từ khóa hoặc URL để tải 2 khung song song..." style="
+        <div style="font-weight:600;margin-bottom:6px;">Mở Tab Mới</div>
+        <input id="cn-input" type="text" placeholder="Nhập URL (nếu có) hoặc để trống để mở tab mới..." style="
           width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:6px;
           border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;
         " />
-        <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="pu-run-parallel" type="button" style="
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button id="cn-open-btn" type="button" style="
             flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;font-weight:600;
-          ">Chạy Song Song Trong UI</button>
-          <button id="pu-open-tab-query" type="button" style="
-            background:#334155;color:#fff;border:none;border-radius:6px;
-            padding:6px 10px;cursor:pointer;
           ">Mở Tab Mới</button>
+          <button id="cn-thub-btn" type="button" style="
+            background:#0284c7;color:#fff;border:none;border-radius:6px;
+            padding:6px 10px;cursor:pointer;font-weight:600;
+          ">Copy "T HUB" & Mở Tab</button>
         </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-          <div>
-            <div style="font-size:11px;color:#94a3b8;margin-bottom:3px;">Khung 1 (DuckDuckGo)</div>
-            <iframe id="pu-frame-1" src="about:blank" style="
-              width:100%;height:190px;border:1px solid #475569;border-radius:6px;background:#fff;
-            "></iframe>
-          </div>
-          <div>
-            <div style="font-size:11px;color:#94a3b8;margin-bottom:3px;">Khung 2 (Bing / URL)</div>
-            <iframe id="pu-frame-2" src="about:blank" style="
-              width:100%;height:190px;border:1px solid #475569;border-radius:6px;background:#fff;
-            "></iframe>
-          </div>
+        <div id="cn-note" style="font-size:11px;color:#94a3b8;margin-top:6px;">
+          Nhập URL/tên miền sẽ mở thẳng trang đó; không nhập hoặc nhập từ khóa thường sẽ mở tab mới không gắn trang tìm kiếm ngoài.
         </div>
       </div>
 
-      <!-- Lấy Full Code trang hiện tại -->
       <div style="background:#1e293b;padding:8px;border-radius:8px;">
         <div style="font-weight:600;margin-bottom:6px;">Full Code Trang Hiện Tại</div>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="pu-get-code" type="button" style="
+          <button id="cn-get-code" type="button" style="
             background:#0284c7;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Lấy Full Code</button>
-          <button id="pu-copy-code" type="button" style="
+          <button id="cn-copy-code" type="button" style="
             background:#475569;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Copy</button>
         </div>
-        <textarea id="pu-code-area" rows="6" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
+        <textarea id="cn-code-area" rows="8" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
           width:100%;box-sizing:border-box;background:#020617;color:#e2e8f0;
           border:1px solid #334155;border-radius:6px;padding:6px;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
@@ -134,72 +104,56 @@
 
   document.body.appendChild(root);
 
-  const toggleBtn = document.getElementById("pu-toggle-btn");
-  const closeBtn = document.getElementById("pu-close-btn");
-  const panel = document.getElementById("pu-panel");
-  const quickThubBtn = document.getElementById("pu-quick-thub");
-  const quickThubUiBtn = document.getElementById("pu-quick-thub-ui");
-  const searchInput = document.getElementById("pu-search-input");
-  const runParallelBtn = document.getElementById("pu-run-parallel");
-  const openTabQueryBtn = document.getElementById("pu-open-tab-query");
-  const frame1 = document.getElementById("pu-frame-1");
-  const frame2 = document.getElementById("pu-frame-2");
-  const getCodeBtn = document.getElementById("pu-get-code");
-  const copyCodeBtn = document.getElementById("pu-copy-code");
-  const codeArea = document.getElementById("pu-code-area");
+  const toggleBtn = document.getElementById("cn-toggle-btn");
+  const closeBtn = document.getElementById("cn-close-btn");
+  const panel = document.getElementById("cn-panel");
+  const input = document.getElementById("cn-input");
+  const openBtn = document.getElementById("cn-open-btn");
+  const thubBtn = document.getElementById("cn-thub-btn");
+  const getCodeBtn = document.getElementById("cn-get-code");
+  const copyCodeBtn = document.getElementById("cn-copy-code");
+  const codeArea = document.getElementById("cn-code-area");
 
   function setOpen(open) {
     panel.style.display = open ? "block" : "none";
     toggleBtn.textContent = open ? "Ẩn UI" : "Mở UI";
   }
 
-  function openSearchNewTab(keyword) {
-    const q = encodeURIComponent((keyword || "").trim());
-    if (!q) return;
-    window.open(`https://duckduckgo.com/?q=${q}`, "_blank", "noopener,noreferrer");
+  function resolveDirectUrl(raw) {
+    const text = (raw || "").trim();
+    if (!text) return "about:blank";
+    if (/^https?:\/\//i.test(text)) return text;
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text)) {
+      return "https://" + text;
+    }
+    return "about:blank";
   }
 
-  function runParallelInUi(raw) {
-    const text = (raw || "").trim();
-    if (!text) return;
-
-    if (/^https?:\/\//i.test(text) || (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text))) {
-      const url = /^https?:\/\//i.test(text) ? text : "https://" + text;
-      frame1.src = url;
-      frame2.src = `https://www.bing.com/search?q=${encodeURIComponent(text)}`;
-      return;
+  async function copyText(str) {
+    try {
+      await navigator.clipboard.writeText(str);
+    } catch {
+      const temp = document.createElement("textarea");
+      temp.value = str;
+      document.body.appendChild(temp);
+      temp.select();
+      document.execCommand("copy");
+      temp.remove();
     }
-
-    const encoded = encodeURIComponent(text);
-    frame1.src = `https://html.duckduckgo.com/html/?q=${encoded}`;
-    frame2.src = `https://www.bing.com/search?q=${encoded}`;
   }
 
   toggleBtn.addEventListener("click", () => setOpen(panel.style.display !== "block"));
   closeBtn.addEventListener("click", () => setOpen(false));
 
-  quickThubBtn.addEventListener("click", () => {
-    openSearchNewTab("T HUB");
+  openBtn.addEventListener("click", () => {
+    const target = resolveDirectUrl(input.value);
+    window.open(target, "_blank", "noopener,noreferrer");
   });
 
-  quickThubUiBtn.addEventListener("click", () => {
-    searchInput.value = "T HUB";
-    runParallelInUi("T HUB");
-  });
-
-  runParallelBtn.addEventListener("click", () => {
-    runParallelInUi(searchInput.value);
-  });
-
-  searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      runParallelInUi(searchInput.value);
-    }
-  });
-
-  openTabQueryBtn.addEventListener("click", () => {
-    openSearchNewTab(searchInput.value);
+  thubBtn.addEventListener("click", async () => {
+    input.value = "T HUB";
+    await copyText("T HUB");
+    window.open("about:blank", "_blank", "noopener,noreferrer");
   });
 
   getCodeBtn.addEventListener("click", () => {
@@ -208,13 +162,8 @@
 
   copyCodeBtn.addEventListener("click", async () => {
     if (!codeArea.value) return;
-    try {
-      await navigator.clipboard.writeText(codeArea.value);
-      copyCodeBtn.textContent = "Đã copy";
-      setTimeout(() => (copyCodeBtn.textContent = "Copy"), 1200);
-    } catch {
-      codeArea.select();
-      document.execCommand("copy");
-    }
+    await copyText(codeArea.value);
+    copyCodeBtn.textContent = "Đã copy";
+    setTimeout(() => (copyCodeBtn.textContent = "Copy"), 1200);
   });
 })();
