@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Safari Tab Opener UI & Full Code
+// @name         Safari Mode UI & Full Code
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  Nhập từ khóa hoặc URL bất kỳ để hiện nút mở tab mới nhanh, xem trong UI và lấy full code trang hiện tại
+// @version      1.5
+// @description  Chuyển chế độ mặc định sang Safari, xem kết quả ngay trong UI hoặc mở tab mới, và lấy full code trang hiện tại
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,23 +10,23 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self || document.getElementById("safari-tab-ui-root")) return;
+  if (window.top !== window.self || document.getElementById("safari-mode-ui-root")) return;
 
   const root = document.createElement("div");
-  root.id = "safari-tab-ui-root";
+  root.id = "safari-mode-ui-root";
   root.style.cssText = `
     position: fixed;
     bottom: 18px;
     right: 18px;
     z-index: 2147483647;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
     font-size: 13px;
     color: #f8fafc;
   `;
 
   root.innerHTML = `
-    <button id="st-toggle-btn" type="button" style="
-      background: #2563eb;
+    <button id="sf-toggle-btn" type="button" style="
+      background: #0ea5e9;
       color: #ffffff;
       border: none;
       border-radius: 999px;
@@ -34,13 +34,13 @@
       font-weight: 600;
       cursor: pointer;
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-    ">Mở UI</button>
+    ">Mở UI (Safari)</button>
 
-    <div id="st-panel" style="
+    <div id="sf-panel" style="
       display: none;
       margin-top: 8px;
       width: 360px;
-      max-height: 84vh;
+      max-height: 85vh;
       overflow-y: auto;
       background: #0f172a;
       border: 1px solid #334155;
@@ -49,8 +49,8 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <strong>UI Mở Tab & Full Code</strong>
-        <button id="st-close-btn" type="button" style="
+        <strong>Safari UI & Full Code</strong>
+        <button id="sf-close-btn" type="button" style="
           background: transparent;
           color: #94a3b8;
           border: 1px solid #334155;
@@ -60,16 +60,15 @@
         ">Đóng</button>
       </div>
 
-      <!-- Ô nhập từ khóa hoặc URL -->
+      <!-- Ô nhập từ khóa / URL với chế độ mặc định Safari -->
       <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-        <div style="font-weight:600;margin-bottom:6px;">Nhập Từ Khóa / URL</div>
-        <input id="st-query-input" type="text" placeholder="Nhập từ khóa hoặc địa chỉ web..." style="
+        <div style="font-weight:600;margin-bottom:6px;">Chế độ hiện tại: <span style="color:#38bdf8;">Safari</span></div>
+        <input id="sf-query-input" type="text" placeholder="Nhập từ khóa hoặc địa chỉ web..." style="
           width:100%;box-sizing:border-box;padding:7px 9px;
           border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;
         " />
 
-        <!-- Tự hiện khi có nội dung nhập -->
-        <div id="st-action-box" style="
+        <div id="sf-picker" style="
           display: none;
           margin-top: 8px;
           padding: 8px;
@@ -78,22 +77,37 @@
           border-radius: 8px;
         ">
           <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">
-            Nội dung: <span id="st-preview-text" style="color:#e2e8f0;font-weight:600;"></span>
+            Trình duyệt: <strong id="sf-browser-label" style="color:#38bdf8;">Safari</strong> — <span id="sf-preview-text" style="color:#e2e8f0;"></span>
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button id="st-open-tab" type="button" style="
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+            <button class="sf-browser-btn" data-browser="safari" type="button" style="
               flex:1;background:#0ea5e9;color:#fff;border:none;border-radius:6px;
-              padding:7px 10px;cursor:pointer;font-weight:600;font-size:12px;
-            ">Mở tab mới (Safari)</button>
-            <button id="st-open-frame" type="button" style="
-              background:#7c3aed;color:#fff;border:none;border-radius:6px;
-              padding:7px 10px;cursor:pointer;font-size:12px;
+              padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;
+            ">Safari</button>
+            <button class="sf-browser-btn" data-browser="duckduckgo" type="button" style="
+              flex:1;background:#0d9488;color:#fff;border:none;border-radius:6px;
+              padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;
+            ">DuckGo</button>
+            <button class="sf-browser-btn" data-browser="bing" type="button" style="
+              flex:1;background:#334155;color:#fff;border:none;border-radius:6px;
+              padding:6px 8px;cursor:pointer;font-size:12px;font-weight:600;
+            ">Bing</button>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button id="sf-view-in-ui" type="button" style="
+              flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;
+              padding:7px 10px;cursor:pointer;font-size:12px;font-weight:600;
             ">Xem trong UI</button>
+            <button id="sf-open-tab" type="button" style="
+              background:#2563eb;color:#fff;border:none;border-radius:6px;
+              padding:7px 10px;cursor:pointer;font-size:12px;font-weight:600;
+            ">Mở tab Safari</button>
           </div>
         </div>
 
-        <iframe id="st-frame" src="about:blank" style="
-          width:100%;height:170px;margin-top:8px;border:1px solid #475569;
+        <div id="sf-status" style="font-size:11px;color:#94a3b8;margin-top:6px;">Sẵn sàng ở chế độ Safari.</div>
+        <iframe id="sf-frame" src="about:blank" style="
+          width:100%;height:220px;margin-top:6px;border:1px solid #475569;
           border-radius:6px;background:#ffffff;
         "></iframe>
       </div>
@@ -102,16 +116,16 @@
       <div style="background:#1e293b;padding:8px;border-radius:8px;">
         <div style="font-weight:600;margin-bottom:6px;">Full Code Trang Hiện Tại</div>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="st-get-code" type="button" style="
+          <button id="sf-get-code" type="button" style="
             background:#0284c7;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Lấy Full Code</button>
-          <button id="st-copy-code" type="button" style="
+          <button id="sf-copy-code" type="button" style="
             background:#475569;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Copy</button>
         </div>
-        <textarea id="st-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
+        <textarea id="sf-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
           width:100%;box-sizing:border-box;background:#020617;color:#e2e8f0;
           border:1px solid #334155;border-radius:6px;padding:6px;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
@@ -122,66 +136,97 @@
 
   document.body.appendChild(root);
 
-  const toggleBtn = document.getElementById("st-toggle-btn");
-  const closeBtn = document.getElementById("st-close-btn");
-  const panel = document.getElementById("st-panel");
-  const queryInput = document.getElementById("st-query-input");
-  const actionBox = document.getElementById("st-action-box");
-  const previewText = document.getElementById("st-preview-text");
-  const openTabBtn = document.getElementById("st-open-tab");
-  const openFrameBtn = document.getElementById("st-open-frame");
-  const frame = document.getElementById("st-frame");
-  const getCodeBtn = document.getElementById("st-get-code");
-  const copyCodeBtn = document.getElementById("st-copy-code");
-  const codeArea = document.getElementById("st-code-area");
+  const toggleBtn = document.getElementById("sf-toggle-btn");
+  const closeBtn = document.getElementById("sf-close-btn");
+  const panel = document.getElementById("sf-panel");
+  const queryInput = document.getElementById("sf-query-input");
+  const picker = document.getElementById("sf-picker");
+  const browserLabel = document.getElementById("sf-browser-label");
+  const previewText = document.getElementById("sf-preview-text");
+  const viewInUiBtn = document.getElementById("sf-view-in-ui");
+  const openTabBtn = document.getElementById("sf-open-tab");
+  const statusEl = document.getElementById("sf-status");
+  const frame = document.getElementById("sf-frame");
+  const getCodeBtn = document.getElementById("sf-get-code");
+  const copyCodeBtn = document.getElementById("sf-copy-code");
+  const codeArea = document.getElementById("sf-code-area");
 
-  function resolveUrl(rawInput) {
-    const text = (rawInput || "").trim();
+  let currentBrowser = "safari";
+
+  const browserNames = {
+    safari: "Safari",
+    duckduckgo: "DuckDuckGo",
+    bing: "Bing"
+  };
+
+  function buildUrl(raw, browser) {
+    const text = (raw || "").trim();
     if (!text) return "";
+
     if (/^https?:\/\//i.test(text)) return text;
     if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text)) {
       return "https://" + text;
     }
-    return "https://www.google.com/search?q=" + encodeURIComponent(text);
+
+    const encoded = encodeURIComponent(text);
+    if (browser === "bing") {
+      return `https://www.bing.com/search?q=${encoded}`;
+    }
+    if (browser === "duckduckgo") {
+      return `https://html.duckduckgo.com/html/?q=${encoded}`;
+    }
+    return `https://html.duckduckgo.com/html/?q=${encoded}`;
   }
 
-  function refreshActionBox() {
+  function refreshPicker() {
     const val = queryInput.value.trim();
     if (val.length > 0) {
-      actionBox.style.display = "block";
+      picker.style.display = "block";
       previewText.textContent = val;
+      browserLabel.textContent = browserNames[currentBrowser] || "Safari";
     } else {
-      actionBox.style.display = "none";
+      picker.style.display = "none";
       previewText.textContent = "";
     }
   }
 
+  function loadInsideUi() {
+    const targetUrl = buildUrl(queryInput.value, currentBrowser);
+    if (!targetUrl) return;
+    frame.src = targetUrl;
+    statusEl.textContent = `[${browserNames[currentBrowser]}] Đang tải trong UI: ${targetUrl}`;
+    frame.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
   function setOpen(open) {
     panel.style.display = open ? "block" : "none";
-    toggleBtn.textContent = open ? "Ẩn UI" : "Mở UI";
+    toggleBtn.textContent = open ? "Ẩn UI (Safari)" : "Mở UI (Safari)";
   }
 
   toggleBtn.addEventListener("click", () => setOpen(panel.style.display !== "block"));
   closeBtn.addEventListener("click", () => setOpen(false));
-
-  queryInput.addEventListener("input", refreshActionBox);
+  queryInput.addEventListener("input", refreshPicker);
 
   queryInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const targetUrl = resolveUrl(queryInput.value);
-      if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+      loadInsideUi();
     }
   });
 
-  openTabBtn.addEventListener("click", () => {
-    const targetUrl = resolveUrl(queryInput.value);
-    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
+  document.querySelectorAll(".sf-browser-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      currentBrowser = btn.getAttribute("data-browser") || "safari";
+      refreshPicker();
+      loadInsideUi();
+    });
   });
 
-  openFrameBtn.addEventListener("click", () => {
-    const targetUrl = resolveUrl(queryInput.value);
-    if (targetUrl) frame.src = targetUrl;
+  viewInUiBtn.addEventListener("click", loadInsideUi);
+
+  openTabBtn.addEventListener("click", () => {
+    const targetUrl = buildUrl(queryInput.value, currentBrowser);
+    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
   });
 
   getCodeBtn.addEventListener("click", () => {
