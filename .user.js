@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Desktop Browser Window & Full Code UI
+// @name         Full PC Browser UI & Full Code
 // @namespace    http://tampermonkey.net/
-// @version      2.7
-// @description  Cửa sổ nổi kiểu trình duyệt PC (kéo thanh tiêu đề, thanh địa chỉ + điều hướng iframe, mở tab mới, nút T HUB và lấy full code trang hiện tại)
+// @version      3.0
+// @description  Mô phỏng giao diện trình duyệt PC đa tab, phóng to toàn màn hình, kéo thả, thanh bookmark (T HUB), mở tab Safari ngoài và lấy full code trang hiện tại
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,164 +10,278 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self || document.getElementById("pc-browser-window-ui")) return;
+  if (window.top !== window.self || document.getElementById("full-pc-browser-root")) return;
 
+  // --- QUẢN LÝ TRẠNG THÁI ĐA TAB ---
+  let tabs = [
+    { id: 1, title: "Trang mới", url: "about:blank", history: ["about:blank"], historyIndex: 0 }
+  ];
+  let activeTabId = 1;
+  let nextTabId = 2;
+  let isMaximized = false;
+  let savedRect = null;
+
+  // --- TẠO ROOT CONTAINER ---
   const root = document.createElement("div");
-  root.id = "pc-browser-window-ui";
+  root.id = "full-pc-browser-root";
   root.style.cssText = `
     position: fixed;
     bottom: 18px;
     right: 18px;
     z-index: 2147483647;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     font-size: 13px;
     color: #f8fafc;
   `;
 
   root.innerHTML = `
-    <button id="pc-toggle-btn" type="button" style="
-      background: #2563eb;
+    <button id="pcb-launcher" type="button" style="
+      background: linear-gradient(135deg, #2563eb, #1d4ed8);
       color: #ffffff;
-      border: none;
+      border: 1px solid #60a5fa;
       border-radius: 999px;
-      padding: 8px 14px;
+      padding: 9px 16px;
       font-weight: 600;
       cursor: pointer;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-    ">Mở UI</button>
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    ">Mở Trình Duyệt PC</button>
 
-    <div id="pc-window" style="
+    <div id="pcb-window" style="
       display: none;
-      margin-top: 8px;
-      width: 410px;
-      max-width: 95vw;
-      max-height: 86vh;
-      overflow-y: auto;
+      width: 460px;
+      height: 540px;
+      max-width: 96vw;
+      max-height: 88vh;
       background: #0f172a;
       border: 1px solid #334155;
       border-radius: 12px;
-      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+      flex-direction: column;
+      overflow: hidden;
     ">
-      <!-- Thanh tiêu đề kiểu cửa sổ PC -->
-      <div id="pc-titlebar" style="
+      <!-- 1. THANH TIÊU ĐỀ & THANH TAB KIỂU CHROME/EDGE PC -->
+      <div id="pcb-top-bar" style="
         display: flex;
-        justify-content: space-between;
         align-items: center;
-        padding: 8px 12px;
-        background: #1e293b;
-        border-bottom: 1px solid #334155;
-        border-radius: 12px 12px 0 0;
+        background: #020617;
+        padding: 6px 8px 0 10px;
+        border-bottom: 1px solid #1e293b;
         cursor: move;
         user-select: none;
         touch-action: none;
+        gap: 8px;
       ">
-        <div style="display:flex;align-items:center;gap:6px;">
-          <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;"></span>
-          <span style="width:10px;height:10px;border-radius:50%;background:#eab308;display:inline-block;"></span>
-          <span style="width:10px;height:10px;border-radius:50%;background:#22c55e;display:inline-block;"></span>
-          <strong style="margin-left:4px;font-size:12px;">PC Browser UI</strong>
+        <!-- 3 nút điều khiển cửa sổ -->
+        <div style="display:flex;align-items:center;gap:6px;padding-bottom:6px;flex-shrink:0;">
+          <button id="pcb-win-close" title="Đóng UI" type="button" style="width:12px;height:12px;border-radius:50%;background:#ef4444;border:none;padding:0;cursor:pointer;"></button>
+          <button id="pcb-win-min" title="Thu nhỏ" type="button" style="width:12px;height:12px;border-radius:50%;background:#eab308;border:none;padding:0;cursor:pointer;"></button>
+          <button id="pcb-win-max" title="Phóng to / Thu vừa" type="button" style="width:12px;height:12px;border-radius:50%;background:#22c55e;border:none;padding:0;cursor:pointer;"></button>
         </div>
-        <button id="pc-close-btn" type="button" style="
-          background: transparent;
-          color: #94a3b8;
-          border: 1px solid #475569;
+
+        <!-- Danh sách Tabs -->
+        <div id="pcb-tabs-list" style="
+          display: flex;
+          align-items: flex-end;
+          gap: 4px;
+          overflow-x: auto;
+          flex: 1;
+          scrollbar-width: none;
+        "></div>
+
+        <!-- Nút thêm Tab (+) -->
+        <button id="pcb-new-tab" title="Mở tab mới" type="button" style="
+          background: #1e293b;
+          color: #cbd5e1;
+          border: none;
           border-radius: 6px;
-          padding: 2px 8px;
+          width: 24px;
+          height: 24px;
+          margin-bottom: 4px;
           cursor: pointer;
-          font-size: 11px;
-        ">Đóng</button>
+          font-weight: bold;
+          flex-shrink: 0;
+        ">+</button>
       </div>
 
-      <div style="padding:12px;">
-        <!-- Thanh địa chỉ & điều hướng -->
-        <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-          <div style="display:flex;gap:4px;margin-bottom:6px;">
-            <button id="pc-back-btn" type="button" title="Lùi" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">←</button>
-            <button id="pc-forward-btn" type="button" title="Tới" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">→</button>
-            <button id="pc-reload-btn" type="button" title="Tải lại" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">↻</button>
-            <input id="pc-addr-input" type="text" placeholder="Nhập URL hoặc từ khóa..." style="
-              flex:1;min-width:0;padding:5px 8px;border-radius:6px;
-              border:1px solid #475569;background:#0f172a;color:#fff;
-            " />
-            <button id="pc-go-btn" type="button" style="
-              background:#16a34a;color:#fff;border:none;border-radius:6px;
-              padding:5px 10px;cursor:pointer;font-weight:600;
-            ">Đi</button>
-          </div>
+      <!-- 2. THANH CÔNG CỤ & ĐỊA CHỈ (OMNIBOX) -->
+      <div style="
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        padding: 6px 8px;
+        background: #1e293b;
+        border-bottom: 1px solid #334155;
+      ">
+        <button id="pcb-back" title="Lùi" type="button" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">←</button>
+        <button id="pcb-forward" title="Tới" type="button" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">→</button>
+        <button id="pcb-reload" title="Tải lại" type="button" style="background:#334155;color:#fff;border:none;border-radius:6px;padding:5px 8px;cursor:pointer;">↻</button>
 
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
-            <button id="pc-thub-btn" type="button" style="
-              background:#0284c7;color:#fff;border:none;border-radius:6px;
-              padding:5px 9px;cursor:pointer;font-size:12px;font-weight:600;
-            ">T HUB</button>
-            <button id="pc-newtab-btn" type="button" style="
-              background:#334155;color:#fff;border:none;border-radius:6px;
-              padding:5px 9px;cursor:pointer;font-size:12px;
-            ">Mở tab mới</button>
-          </div>
-
-          <iframe id="pc-frame" src="about:blank" style="
-            width:100%;height:220px;border:1px solid #475569;border-radius:6px;background:#ffffff;
-          "></iframe>
-          <div style="font-size:11px;color:#94a3b8;margin-top:4px;">
-            Khung dùng iframe: các trang chặn nhúng (X-Frame-Options / CSP) có thể không hiển thị — dùng "Mở tab mới" nếu cần.
-          </div>
+        <div style="
+          flex: 1;
+          display: flex;
+          align-items: center;
+          background: #0f172a;
+          border: 1px solid #475569;
+          border-radius: 999px;
+          padding: 3px 10px;
+          min-width: 0;
+        ">
+          <span style="color:#64748b;margin-right:6px;font-size:11px;">🔒</span>
+          <input id="pcb-url-input" type="text" placeholder="Nhập URL hoặc tìm kiếm..." style="
+            flex: 1;
+            min-width: 0;
+            background: transparent;
+            border: none;
+            color: #f8fafc;
+            outline: none;
+            font-size: 12px;
+          " />
         </div>
 
-        <!-- Lấy Full Code trang hiện tại -->
-        <div style="background:#1e293b;padding:8px;border-radius:8px;">
-          <div style="font-weight:600;margin-bottom:6px;">Full Code Trang Hiện Tại</div>
-          <div style="display:flex;gap:6px;margin-bottom:6px;">
-            <button id="pc-get-code" type="button" style="
-              background:#0284c7;color:#fff;border:none;border-radius:6px;
-              padding:6px 10px;cursor:pointer;
-            ">Lấy Full Code</button>
-            <button id="pc-copy-code" type="button" style="
-              background:#475569;color:#fff;border:none;border-radius:6px;
-              padding:6px 10px;cursor:pointer;
-            ">Copy</button>
+        <button id="pcb-go" type="button" style="
+          background: #2563eb;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 5px 10px;
+          cursor: pointer;
+          font-weight: 600;
+          font-size: 12px;
+        ">Đi</button>
+
+        <button id="pcb-ext-safari" title="Mở URL này bằng tab Safari ngoài" type="button" style="
+          background: #0ea5e9;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 5px 8px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 600;
+        ">↗ Tab</button>
+
+        <button id="pcb-toggle-devtools" title="Lấy Full Code trang hiện tại" type="button" style="
+          background: #475569;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 5px 8px;
+          cursor: pointer;
+          font-size: 11px;
+          font-weight: 600;
+        ">&lt;/&gt;</button>
+      </div>
+
+      <!-- 3. THANH DẤU TRANG (BOOKMARKS BAR) -->
+      <div style="
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        background: #162032;
+        border-bottom: 1px solid #334155;
+        overflow-x: auto;
+        font-size: 11px;
+      ">
+        <button id="pcb-bm-thub" type="button" style="background:#0284c7;color:#fff;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;font-weight:600;white-space:nowrap;">📋 T HUB</button>
+        <button class="pcb-bm-link" data-url="https://en.m.wikipedia.org" type="button" style="background:#334155;color:#e2e8f0;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">Wikipedia</button>
+        <button class="pcb-bm-link" data-url="https://example.com" type="button" style="background:#334155;color:#e2e8f0;border:none;border-radius:4px;padding:3px 8px;cursor:pointer;white-space:nowrap;">Example</button>
+        <span id="pcb-toast" style="color:#38bdf8;margin-left:auto;white-space:nowrap;"></span>
+      </div>
+
+      <!-- 4. KHU VỰC HIỂN THỊ CHÍNH (VIEWPORT + DEVTOOLS FULL CODE) -->
+      <div style="flex:1;display:flex;flex-direction:column;min-height:0;position:relative;background:#ffffff;">
+        <iframe id="pcb-viewport" src="about:blank" style="
+          flex: 1;
+          width: 100%;
+          border: none;
+          background: #ffffff;
+        "></iframe>
+
+        <!-- Ngăn DevTools lấy Full Code trang web hiện tại -->
+        <div id="pcb-devtools-drawer" style="
+          display: none;
+          height: 48%;
+          background: #0f172a;
+          border-top: 2px solid #3b82f6;
+          padding: 8px;
+          flex-direction: column;
+          color: #f8fafc;
+        ">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:6px;">
+            <strong style="font-size:12px;color:#60a5fa;">DevTools — Full Code Trang Hiện Tại</strong>
+            <div style="display:flex;gap:5px;">
+              <button id="pcb-code-fetch" type="button" style="background:#2563eb;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:600;">Lấy Code</button>
+              <button id="pcb-code-copy" type="button" style="background:#16a34a;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:600;">Copy</button>
+              <button id="pcb-code-dl" type="button" style="background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:600;">Tải .html</button>
+            </div>
           </div>
-          <textarea id="pc-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
-            width:100%;box-sizing:border-box;background:#020617;color:#e2e8f0;
-            border:1px solid #334155;border-radius:6px;padding:6px;
-            font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+          <textarea id="pcb-code-output" readonly placeholder="Bấm 'Lấy Code' để trích xuất toàn bộ HTML của trang web đang mở..." style="
+            flex: 1;
+            width: 100%;
+            box-sizing: border-box;
+            background: #020617;
+            color: #a5f3fc;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px;
+            resize: none;
           "></textarea>
         </div>
+      </div>
+
+      <!-- 5. THANH TRẠNG THÁI (STATUS BAR) -->
+      <div style="
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 3px 10px;
+        background: #020617;
+        border-top: 1px solid #1e293b;
+        font-size: 10px;
+        color: #94a3b8;
+      ">
+        <span id="pcb-status-text">Sẵn sàng • Nhập URL để tải trong khung hoặc bấm ↗ Tab để mở ngoài</span>
+        <span>PC Mode</span>
       </div>
     </div>
   `;
 
   document.body.appendChild(root);
 
-  const toggleBtn = document.getElementById("pc-toggle-btn");
-  const closeBtn = document.getElementById("pc-close-btn");
-  const win = document.getElementById("pc-window");
-  const titlebar = document.getElementById("pc-titlebar");
-  const backBtn = document.getElementById("pc-back-btn");
-  const forwardBtn = document.getElementById("pc-forward-btn");
-  const reloadBtn = document.getElementById("pc-reload-btn");
-  const addrInput = document.getElementById("pc-addr-input");
-  const goBtn = document.getElementById("pc-go-btn");
-  const thubBtn = document.getElementById("pc-thub-btn");
-  const newTabBtn = document.getElementById("pc-newtab-btn");
-  const frame = document.getElementById("pc-frame");
-  const getCodeBtn = document.getElementById("pc-get-code");
-  const copyCodeBtn = document.getElementById("pc-copy-code");
-  const codeArea = document.getElementById("pc-code-area");
+  // --- THAM CHIẾU PHẦN TỬ ---
+  const launcher = document.getElementById("pcb-launcher");
+  const win = document.getElementById("pcb-window");
+  const topBar = document.getElementById("pcb-top-bar");
+  const winClose = document.getElementById("pcb-win-close");
+  const winMin = document.getElementById("pcb-win-min");
+  const winMax = document.getElementById("pcb-win-max");
+  const tabsList = document.getElementById("pcb-tabs-list");
+  const newTabBtn = document.getElementById("pcb-new-tab");
+  const backBtn = document.getElementById("pcb-back");
+  const forwardBtn = document.getElementById("pcb-forward");
+  const reloadBtn = document.getElementById("pcb-reload");
+  const urlInput = document.getElementById("pcb-url-input");
+  const goBtn = document.getElementById("pcb-go");
+  const extSafariBtn = document.getElementById("pcb-ext-safari");
+  const toggleDevtoolsBtn = document.getElementById("pcb-toggle-devtools");
+  const bmThubBtn = document.getElementById("pcb-bm-thub");
+  const toastEl = document.getElementById("pcb-toast");
+  const viewport = document.getElementById("pcb-viewport");
+  const devtoolsDrawer = document.getElementById("pcb-devtools-drawer");
+  const codeFetchBtn = document.getElementById("pcb-code-fetch");
+  const codeCopyBtn = document.getElementById("pcb-code-copy");
+  const codeDlBtn = document.getElementById("pcb-code-dl");
+  const codeOutput = document.getElementById("pcb-code-output");
+  const statusText = document.getElementById("pcb-status-text");
 
-  function setOpen(open) {
-    win.style.display = open ? "block" : "none";
-    toggleBtn.textContent = open ? "Ẩn UI" : "Mở UI";
-  }
-
-  function buildTargetUrl(raw) {
-    const text = (raw || "").trim();
-    if (!text) return "";
-    if (/^https?:\/\//i.test(text)) return text;
-    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text)) {
-      return "https://" + text;
-    }
-    return "https://www.google.com/search?q=" + encodeURIComponent(text);
+  function showToast(msg) {
+    toastEl.textContent = msg;
+    setTimeout(() => {
+      if (toastEl.textContent === msg) toastEl.textContent = "";
+    }, 2000);
   }
 
   async function copyText(str) {
@@ -183,96 +297,298 @@
     }
   }
 
-  // Kéo thả cửa sổ theo thanh tiêu đề
-  let dragging = false;
-  let startX = 0;
-  let startY = 0;
-  let origLeft = 0;
-  let origTop = 0;
+  function resolveInput(raw) {
+    const text = (raw || "").trim();
+    if (!text || text === "about:blank") return "about:blank";
+    if (/^https?:\/\//i.test(text)) return text;
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text)) {
+      return "https://" + text;
+    }
+    return "https://www.google.com/search?q=" + encodeURIComponent(text);
+  }
 
-  titlebar.addEventListener("pointerdown", (e) => {
-    if (e.target === closeBtn) return;
-    dragging = true;
+  function extractTitle(url) {
+    if (!url || url === "about:blank") return "Trang mới";
+    try {
+      const u = new URL(url);
+      if (u.hostname.includes("google.") && u.searchParams.get("q")) {
+        return "Tìm: " + u.searchParams.get("q");
+      }
+      return u.hostname.replace(/^www\./, "");
+    } catch {
+      return url.slice(0, 18);
+    }
+  }
+
+  function getActiveTab() {
+    return tabs.find((t) => t.id === activeTabId) || tabs[0];
+  }
+
+  function renderTabs() {
+    tabsList.innerHTML = "";
+    tabs.forEach((tab) => {
+      const isActive = tab.id === activeTabId;
+      const tabEl = document.createElement("div");
+      tabEl.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 5px 10px;
+        background: ${isActive ? "#1e293b" : "#0f172a"};
+        color: ${isActive ? "#ffffff" : "#94a3b8"};
+        border-radius: 8px 8px 0 0;
+        border: 1px solid ${isActive ? "#334155" : "transparent"};
+        border-bottom: none;
+        cursor: pointer;
+        max-width: 130px;
+        font-size: 11px;
+        flex-shrink: 0;
+      `;
+
+      const titleSpan = document.createElement("span");
+      titleSpan.textContent = tab.title;
+      titleSpan.style.cssText = "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;";
+      tabEl.appendChild(titleSpan);
+
+      if (tabs.length > 1) {
+        const closeSpan = document.createElement("span");
+        closeSpan.textContent = "×";
+        closeSpan.style.cssText = "font-weight:bold;padding:0 2px;border-radius:4px;";
+        closeSpan.addEventListener("click", (e) => {
+          e.stopPropagation();
+          closeTab(tab.id);
+        });
+        tabEl.appendChild(closeSpan);
+      }
+
+      tabEl.addEventListener("click", () => switchTab(tab.id));
+      tabsList.appendChild(tabEl);
+    });
+  }
+
+  function syncViewportToTab(tab) {
+    urlInput.value = tab.url === "about:blank" ? "" : tab.url;
+    viewport.src = tab.url;
+    backBtn.style.opacity = tab.historyIndex > 0 ? "1" : "0.4";
+    forwardBtn.style.opacity = tab.historyIndex < tab.history.length - 1 ? "1" : "0.4";
+    statusText.textContent = tab.url === "about:blank" ? "Tab mới trống" : `Đang tải: ${tab.url}`;
+  }
+
+  function switchTab(id) {
+    activeTabId = id;
+    const tab = getActiveTab();
+    renderTabs();
+    syncViewportToTab(tab);
+  }
+
+  function createNewTab(initialUrl = "about:blank") {
+    const id = nextTabId++;
+    const resolved = resolveInput(initialUrl);
+    const newTab = {
+      id,
+      title: extractTitle(resolved),
+      url: resolved,
+      history: [resolved],
+      historyIndex: 0
+    };
+    tabs.push(newTab);
+    switchTab(id);
+  }
+
+  function closeTab(id) {
+    const idx = tabs.findIndex((t) => t.id === id);
+    if (idx === -1 || tabs.length <= 1) return;
+    tabs.splice(idx, 1);
+    if (activeTabId === id) {
+      const nextTab = tabs[Math.max(0, idx - 1)];
+      activeTabId = nextTab.id;
+    }
+    renderTabs();
+    syncViewportToTab(getActiveTab());
+  }
+
+  function navigateActiveTab(rawInput) {
+    const targetUrl = resolveInput(rawInput);
+    const tab = getActiveTab();
+    tab.history = tab.history.slice(0, tab.historyIndex + 1);
+    tab.history.push(targetUrl);
+    tab.historyIndex = tab.history.length - 1;
+    tab.url = targetUrl;
+    tab.title = extractTitle(targetUrl);
+    renderTabs();
+    syncViewportToTab(tab);
+  }
+
+  // --- SỰ KIỆN MỞ / ĐÓNG / PHÓNG TO CỬA SỔ ---
+  function openWindow() {
+    launcher.style.display = "none";
+    win.style.display = "flex";
+    renderTabs();
+  }
+
+  function closeWindow() {
+    win.style.display = "none";
+    launcher.style.display = "inline-block";
+  }
+
+  launcher.addEventListener("click", openWindow);
+  winClose.addEventListener("click", closeWindow);
+  winMin.addEventListener("click", closeWindow);
+
+  winMax.addEventListener("click", () => {
+    if (!isMaximized) {
+      const rect = root.getBoundingClientRect();
+      savedRect = {
+        left: root.style.left,
+        top: root.style.top,
+        right: root.style.right,
+        bottom: root.style.bottom,
+        width: win.style.width,
+        height: win.style.height
+      };
+      root.style.left = "8px";
+      root.style.top = "8px";
+      root.style.right = "auto";
+      root.style.bottom = "auto";
+      win.style.width = "calc(100vw - 16px)";
+      win.style.height = "calc(100vh - 16px)";
+      win.style.maxWidth = "none";
+      win.style.maxHeight = "none";
+      isMaximized = true;
+    } else {
+      root.style.left = savedRect?.left || "auto";
+      root.style.top = savedRect?.top || "auto";
+      root.style.right = savedRect?.right || "18px";
+      root.style.bottom = savedRect?.bottom || "18px";
+      win.style.width = savedRect?.width || "460px";
+      win.style.height = savedRect?.height || "540px";
+      win.style.maxWidth = "96vw";
+      win.style.maxHeight = "88vh";
+      isMaximized = false;
+    }
+  });
+
+  // --- KÉO THẢ CỬA SỔ ---
+  let isDragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let winStartX = 0;
+  let winStartY = 0;
+
+  topBar.addEventListener("pointerdown", (e) => {
+    if (isMaximized || e.target.closest("button") || e.target.closest("#pcb-tabs-list")) return;
+    isDragging = true;
     const rect = root.getBoundingClientRect();
     root.style.left = rect.left + "px";
     root.style.top = rect.top + "px";
     root.style.right = "auto";
     root.style.bottom = "auto";
-    startX = e.clientX;
-    startY = e.clientY;
-    origLeft = rect.left;
-    origTop = rect.top;
-    titlebar.setPointerCapture(e.pointerId);
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    winStartX = rect.left;
+    winStartY = rect.top;
+    topBar.setPointerCapture(e.pointerId);
   });
 
-  titlebar.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    const nextLeft = origLeft + (e.clientX - startX);
-    const nextTop = origTop + (e.clientY - startY);
-    root.style.left = Math.max(0, nextLeft) + "px";
-    root.style.top = Math.max(0, nextTop) + "px";
+  topBar.addEventListener("pointermove", (e) => {
+    if (!isDragging) return;
+    const x = Math.max(0, Math.min(window.innerWidth - 100, winStartX + (e.clientX - dragStartX)));
+    const y = Math.max(0, Math.min(window.innerHeight - 60, winStartY + (e.clientY - dragStartY)));
+    root.style.left = x + "px";
+    root.style.top = y + "px";
   });
 
-  titlebar.addEventListener("pointerup", () => {
-    dragging = false;
+  topBar.addEventListener("pointerup", () => {
+    isDragging = false;
   });
 
-  toggleBtn.addEventListener("click", () => setOpen(win.style.display !== "block"));
-  closeBtn.addEventListener("click", () => setOpen(false));
+  // --- SỰ KIỆN ĐIỀU HƯỚNG & TAB ---
+  newTabBtn.addEventListener("click", () => createNewTab("about:blank"));
 
-  goBtn.addEventListener("click", () => {
-    const url = buildTargetUrl(addrInput.value);
-    if (url) frame.src = url;
-  });
-
-  addrInput.addEventListener("keydown", (e) => {
+  goBtn.addEventListener("click", () => navigateActiveTab(urlInput.value));
+  urlInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const url = buildTargetUrl(addrInput.value);
-      if (url) frame.src = url;
+      navigateActiveTab(urlInput.value);
     }
   });
 
   backBtn.addEventListener("click", () => {
-    try {
-      frame.contentWindow.history.back();
-    } catch {}
-  });
-
-  forwardBtn.addEventListener("click", () => {
-    try {
-      frame.contentWindow.history.forward();
-    } catch {}
-  });
-
-  reloadBtn.addEventListener("click", () => {
-    try {
-      frame.contentWindow.location.reload();
-    } catch {
-      frame.src = frame.src;
+    const tab = getActiveTab();
+    if (tab.historyIndex > 0) {
+      tab.historyIndex--;
+      tab.url = tab.history[tab.historyIndex];
+      tab.title = extractTitle(tab.url);
+      renderTabs();
+      syncViewportToTab(tab);
     }
   });
 
-  newTabBtn.addEventListener("click", () => {
-    const url = buildTargetUrl(addrInput.value) || (frame.src !== "about:blank" ? frame.src : "https://www.google.com/");
-    window.open(url, "_blank", "noopener,noreferrer");
+  forwardBtn.addEventListener("click", () => {
+    const tab = getActiveTab();
+    if (tab.historyIndex < tab.history.length - 1) {
+      tab.historyIndex++;
+      tab.url = tab.history[tab.historyIndex];
+      tab.title = extractTitle(tab.url);
+      renderTabs();
+      syncViewportToTab(tab);
+    }
   });
 
-  thubBtn.addEventListener("click", async () => {
+  reloadBtn.addEventListener("click", () => {
+    const tab = getActiveTab();
+    viewport.src = tab.url;
+    showToast("Đã tải lại khung");
+  });
+
+  extSafariBtn.addEventListener("click", () => {
+    const target = resolveInput(urlInput.value) !== "about:blank"
+      ? resolveInput(urlInput.value)
+      : (getActiveTab().url !== "about:blank" ? getActiveTab().url : "https://www.google.com/");
+    window.open(target, "_blank", "noopener,noreferrer");
+  });
+
+  // --- BOOKMARKS ---
+  bmThubBtn.addEventListener("click", async () => {
     await copyText("T HUB");
-    addrInput.value = "T HUB";
-    thubBtn.textContent = 'Đã copy "T HUB"';
-    setTimeout(() => (thubBtn.textContent = "T HUB"), 1200);
+    urlInput.value = "T HUB";
+    showToast('Đã copy "T HUB"');
   });
 
-  getCodeBtn.addEventListener("click", () => {
-    codeArea.value = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+  document.querySelectorAll(".pcb-bm-link").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const url = btn.getAttribute("data-url");
+      if (url) navigateActiveTab(url);
+    });
   });
 
-  copyCodeBtn.addEventListener("click", async () => {
-    if (!codeArea.value) return;
-    await copyText(codeArea.value);
-    copyCodeBtn.textContent = "Đã copy";
-    setTimeout(() => (copyCodeBtn.textContent = "Copy"), 1200);
+  // --- DEVTOOLS FULL CODE TRANG HIỆN TẠI ---
+  toggleDevtoolsBtn.addEventListener("click", () => {
+    const isHidden = devtoolsDrawer.style.display === "none";
+    devtoolsDrawer.style.display = isHidden ? "flex" : "none";
+  });
+
+  codeFetchBtn.addEventListener("click", () => {
+    codeOutput.value = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+    showToast("Đã lấy Full Code");
+  });
+
+  codeCopyBtn.addEventListener("click", async () => {
+    if (!codeOutput.value) {
+      codeOutput.value = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+    }
+    await copyText(codeOutput.value);
+    showToast("Đã copy Full Code");
+  });
+
+  codeDlBtn.addEventListener("click", () => {
+    const html = codeOutput.value || ("<!DOCTYPE html>\n" + document.documentElement.outerHTML);
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (document.title || "page").replace(/[\\/:*?"<>|]/g, "_") + ".html";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast("Đang tải file .html");
   });
 })();
