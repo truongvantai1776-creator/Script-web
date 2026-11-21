@@ -1,617 +1,446 @@
 // ==UserScript==
-// @name         Web OS Mini Browser & Source Inspector
-// @namespace    https://tampermonkey.net/
-// @version      1.0.0
-// @description  Cửa sổ OS kéo thả, mini browser đa tab, inspector xem/tải code HTML và ghi chú nhanh
+// @name         T-HUB Web Inspector & Mini TikTok
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  Lấy full source code trang web hiện tại và lướt TikTok ngay trong UI nổi
+// @author       T HUB
 // @match        *://*/*
-// @grant        none
-// @run-at       document-idle
+// @grant        GM_setClipboard
+// @run-at       document-end
 // ==/UserScript==
 
-(function () {
-  'use strict';
+(function() {
+    'use strict';
 
-  if (window.__WEB_OS_USERSCRIPT_LOADED__) return;
-  window.__WEB_OS_USERSCRIPT_LOADED__ = true;
+    // Tránh chạy trùng lặp nhiều lần trong các iframe con
+    if (window.top !== window.self) return;
 
-  const STYLE_ID = 'wos-us-style';
-  const ROOT_ID = 'wos-us-root';
+    // Tạo Shadow DOM để CSS của script không bị xung đột với trang web hiện tại
+    const host = document.createElement('div');
+    host.id = 'thub-userscript-host';
+    host.style.cssText = 'position: fixed; top: 0; left: 0; z-index: 2147483647; pointer-events: none;';
+    document.body.appendChild(host);
 
-  const style = document.createElement('style');
-  style.id = STYLE_ID;
-  style.textContent = `
-    #${ROOT_ID} {
-      --wos-bg: rgba(17, 24, 39, 0.92);
-      --wos-solid: #111827;
-      --wos-border: rgba(255, 255, 255, 0.14);
-      --wos-text: #f9fafb;
-      --wos-muted: #9ca3af;
-      --wos-accent: #3b82f6;
-      --wos-danger: #ef4444;
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 2147483646;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-      color: var(--wos-text);
-    }
+    const shadow = host.attachShadow({ mode: 'open' });
 
-    #${ROOT_ID}.theme-emerald {
-      --wos-accent: #10b981;
-    }
+    // CSS Giao diện (Tối ưu cho cả điện thoại và máy tính)
+    const style = document.createElement('style');
+    style.textContent = `
+        * {
+            box-sizing: border-box;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        /* Nút bật/tắt UI nổi */
+        #toggle-btn {
+            position: fixed;
+            bottom: 80px;
+            right: 15px;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ff0050, #00f2fe);
+            color: #fff;
+            border: 2px solid rgba(255, 255, 255, 0.8);
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            font-weight: bold;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            pointer-events: auto;
+            user-select: none;
+            touch-action: none;
+            transition: transform 0.15s ease;
+        }
+        #toggle-btn:active {
+            transform: scale(0.92);
+        }
 
-    #${ROOT_ID}.theme-sunset {
-      --wos-accent: #f43f5e;
-    }
+        /* Khung UI chính */
+        #main-ui {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 92vw;
+            max-width: 420px;
+            height: 75vh;
+            max-height: 620px;
+            background: #121216;
+            color: #f1f1f1;
+            border-radius: 16px;
+            border: 1px solid #2c2c35;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.75);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            pointer-events: auto;
+        }
+        #main-ui.open {
+            display: flex;
+        }
 
-    #${ROOT_ID} * {
-      box-sizing: border-box;
-      -webkit-tap-highlight-color: transparent;
-    }
+        /* Header UI */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            background: #1a1a22;
+            border-bottom: 1px solid #2c2c35;
+        }
+        .title {
+            font-size: 15px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #00f2fe, #ff0050);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .close-btn {
+            background: #ff3b30;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
 
-    .wos-fab {
-      position: fixed;
-      right: 16px;
-      bottom: 16px;
-      height: 40px;
-      padding: 0 14px;
-      border-radius: 999px;
-      border: 1px solid var(--wos-border);
-      background: var(--wos-solid);
-      color: var(--wos-text);
-      font-size: 13px;
-      font-weight: 600;
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
-      pointer-events: auto;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
+        /* Thanh chuyển Tab */
+        .tabs {
+            display: flex;
+            background: #16161d;
+            border-bottom: 1px solid #2c2c35;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: transparent;
+            border: none;
+            color: #8e8e98;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            color: #ffffff;
+            border-bottom: 2px solid #00f2fe;
+            background: #1f1f29;
+        }
 
-    .wos-window {
-      position: fixed;
-      top: 48px;
-      left: 16px;
-      width: min(760px, calc(100vw - 32px));
-      height: min(500px, calc(100vh - 84px));
-      background: var(--wos-bg);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-      border: 1px solid var(--wos-border);
-      border-radius: 14px;
-      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-      display: none;
-      flex-direction: column;
-      overflow: hidden;
-      pointer-events: auto;
-      user-select: none;
-    }
+        /* Nội dung các Tab */
+        .tab-content {
+            flex: 1;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 12px;
+        }
+        .tab-content.active {
+            display: flex;
+        }
 
-    .wos-window.open {
-      display: flex;
-    }
+        /* Tab 1: Source Code */
+        .code-actions {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .action-btn {
+            flex: 1;
+            padding: 8px 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            color: #fff;
+            background: #2b2b36;
+            transition: background 0.2s;
+        }
+        .action-btn.primary {
+            background: #007aff;
+        }
+        .action-btn.success {
+            background: #28a745;
+        }
+        .action-btn:active {
+            opacity: 0.8;
+        }
+        #code-viewer {
+            flex: 1;
+            width: 100%;
+            background: #0a0a0d;
+            color: #a6e22e;
+            border: 1px solid #2c2c35;
+            border-radius: 8px;
+            padding: 10px;
+            font-family: "Courier New", Courier, monospace;
+            font-size: 11px;
+            resize: none;
+            outline: none;
+            white-space: pre;
+            overflow: auto;
+        }
 
-    .wos-window.maximized {
-      top: 8px !important;
-      left: 8px !important;
-      width: calc(100vw - 16px) !important;
-      height: calc(100vh - 16px) !important;
-    }
+        /* Tab 2: TikTok */
+        #tab-tiktok {
+            padding: 0;
+        }
+        .tiktok-bar {
+            display: flex;
+            gap: 6px;
+            padding: 8px 10px;
+            background: #1a1a22;
+            border-bottom: 1px solid #2c2c35;
+        }
+        .tiktok-bar input {
+            flex: 1;
+            background: #0d0d12;
+            border: 1px solid #2c2c35;
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+        }
+        .tiktok-bar button {
+            background: #ff0050;
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            padding: 0 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        #tiktok-frame {
+            flex: 1;
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #000;
+        }
+        .tiktok-note {
+            font-size: 11px;
+            color: #aaa;
+            padding: 6px 10px;
+            background: #16161d;
+            text-align: center;
+        }
+    `;
+    shadow.appendChild(style);
 
-    .wos-header {
-      height: 40px;
-      padding: 0 10px;
-      background: rgba(255, 255, 255, 0.05);
-      border-bottom: 1px solid var(--wos-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      cursor: grab;
-      touch-action: none;
-    }
+    // Cấu trúc HTML của UI
+    const container = document.createElement('div');
+    container.innerHTML = `
+        <div id="toggle-btn" title="Mở/Tắt Menu">UI</div>
 
-    .wos-header:active {
-      cursor: grabbing;
-    }
+        <div id="main-ui">
+            <div class="header">
+                <span class="title">WEB CODE & TIKTOK</span>
+                <button class="close-btn" id="close-ui-btn">Đóng UI</button>
+            </div>
 
-    .wos-title {
-      font-size: 13px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+            <div class="tabs">
+                <button class="tab-btn active" data-target="tab-code">Full Code Web</button>
+                <button class="tab-btn" data-target="tab-tiktok">Lướt TikTok</button>
+            </div>
 
-    .wos-win-actions {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-    }
+            <!-- TAB 1: LẤY CODE WEB -->
+            <div id="tab-code" class="tab-content active">
+                <div class="code-actions">
+                    <button class="action-btn primary" id="btn-refresh-code">Lấy lại Code</button>
+                    <button class="action-btn success" id="btn-copy-code">Copy Code</button>
+                    <button class="action-btn" id="btn-download-code">Tải .HTML</button>
+                </div>
+                <textarea id="code-viewer" readonly placeholder="Nhấn 'Lấy lại Code' để tải mã nguồn trang hiện tại..."></textarea>
+            </div>
 
-    .wos-btn {
-      height: 28px;
-      padding: 0 9px;
-      border-radius: 8px;
-      border: 1px solid var(--wos-border);
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--wos-text);
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
-    .wos-btn:hover {
-      background: rgba(255, 255, 255, 0.14);
-    }
-
-    .wos-btn.primary {
-      background: var(--wos-accent);
-      border-color: transparent;
-      color: #fff;
-      font-weight: 600;
-    }
-
-    .wos-btn.danger:hover {
-      background: var(--wos-danger);
-      border-color: transparent;
-      color: #fff;
-    }
-
-    .wos-modebar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
-      background: rgba(0, 0, 0, 0.25);
-      border-bottom: 1px solid var(--wos-border);
-      overflow-x: auto;
-    }
-
-    .wos-modebar .wos-btn.active {
-      background: var(--wos-accent);
-      border-color: transparent;
-      color: #fff;
-    }
-
-    .wos-panel {
-      flex: 1;
-      min-height: 0;
-      display: none;
-      flex-direction: column;
-    }
-
-    .wos-panel.active {
-      display: flex;
-    }
-
-    .wos-tabs {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 7px 10px 0;
-      background: rgba(0, 0, 0, 0.2);
-      overflow-x: auto;
-    }
-
-    .wos-tab {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      max-width: 170px;
-      padding: 6px 10px;
-      border-radius: 8px 8px 0 0;
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--wos-muted);
-      font-size: 12px;
-      cursor: pointer;
-      flex-shrink: 0;
-    }
-
-    .wos-tab.active {
-      background: var(--wos-solid);
-      color: var(--wos-text);
-    }
-
-    .wos-nav {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 10px;
-      background: var(--wos-solid);
-      border-bottom: 1px solid var(--wos-border);
-    }
-
-    .wos-input {
-      flex: 1;
-      min-width: 70px;
-      height: 30px;
-      padding: 0 10px;
-      border-radius: 8px;
-      border: 1px solid var(--wos-border);
-      background: rgba(0, 0, 0, 0.35);
-      color: var(--wos-text);
-      font-size: 12px;
-      outline: none;
-      user-select: text;
-    }
-
-    .wos-frames {
-      position: relative;
-      flex: 1;
-      min-height: 0;
-      background: #0f172a;
-    }
-
-    .wos-frame {
-      width: 100%;
-      height: 100%;
-      border: none;
-      background: #ffffff;
-      display: none;
-    }
-
-    .wos-frame.active {
-      display: block;
-    }
-
-    .wos-pad {
-      padding: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      height: 100%;
-    }
-
-    .wos-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .wos-textarea {
-      flex: 1;
-      width: 100%;
-      padding: 10px;
-      border-radius: 10px;
-      border: 1px solid var(--wos-border);
-      background: rgba(2, 6, 23, 0.9);
-      color: #e2e8f0;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-      font-size: 12px;
-      resize: none;
-      outline: none;
-      user-select: text;
-    }
-
-    .wos-toast {
-      position: fixed;
-      top: 14px;
-      right: 14px;
-      padding: 8px 12px;
-      border-radius: 9px;
-      background: var(--wos-solid);
-      border: 1px solid var(--wos-border);
-      font-size: 12px;
-      opacity: 0;
-      pointer-events: none;
-      transition: 0.2s ease;
-    }
-
-    .wos-toast.show {
-      opacity: 1;
-    }
-  `;
-  document.head.appendChild(style);
-
-  const root = document.createElement('div');
-  root.id = ROOT_ID;
-  root.innerHTML = `
-    <button class="wos-fab" id="wos-fab">⊞ Web OS</button>
-
-    <div class="wos-window" id="wos-win">
-      <div class="wos-header" id="wos-header">
-        <div class="wos-title">⊞ Web OS — Browser & Source Tools</div>
-        <div class="wos-win-actions">
-          <button class="wos-btn" id="wos-max" title="Phóng to">▢</button>
-          <button class="wos-btn" id="wos-min" title="Thu nhỏ">—</button>
-          <button class="wos-btn danger" id="wos-close" title="Ẩn">✕</button>
+            <!-- TAB 2: TIKTOK -->
+            <div id="tab-tiktok" class="tab-content">
+                <div class="tiktok-bar">
+                    <input type="text" id="tiktok-url" value="https://www.tiktok.com/foryou" placeholder="Nhập link TikTok hoặc @username...">
+                    <button id="btn-go-tiktok">Đi</button>
+                </div>
+                <iframe id="tiktok-frame" src="about:blank" allow="autoplay; fullscreen; encrypted-media" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+                <div class="tiktok-note">Nếu trang bị chặn nhúng (X-Frame), hãy bấm <a href="https://www.tiktok.com" target="_blank" style="color:#00f2fe;">Mở Tab Mới</a></div>
+            </div>
         </div>
-      </div>
+    `;
+    shadow.appendChild(container);
 
-      <div class="wos-modebar">
-        <button class="wos-btn active" data-mode="browser">🌐 Đa Tab</button>
-        <button class="wos-btn" data-mode="inspector">&lt;/&gt; Code & Export</button>
-        <button class="wos-btn" data-mode="notes">📝 Ghi chú</button>
-        <button class="wos-btn" id="wos-theme-btn">🎨 Theme</button>
-      </div>
+    // Các phần tử DOM trong Shadow
+    const toggleBtn = shadow.getElementById('toggle-btn');
+    const mainUI = shadow.getElementById('main-ui');
+    const closeUiBtn = shadow.getElementById('close-ui-btn');
+    const tabBtns = shadow.querySelectorAll('.tab-btn');
+    const tabContents = shadow.querySelectorAll('.tab-content');
 
-      <!-- Panel 1: Multi-Tab Browser -->
-      <div class="wos-panel active" id="panel-browser">
-        <div class="wos-tabs" id="wos-tabs">
-          <button class="wos-btn" id="wos-add-tab">+</button>
-        </div>
-        <div class="wos-nav">
-          <button class="wos-btn" id="wos-reload">↻</button>
-          <input class="wos-input" id="wos-url" type="text" placeholder="Nhập URL hoặc từ khóa..." />
-          <button class="wos-btn primary" id="wos-go">Mở</button>
-          <button class="wos-btn" id="wos-grab">Lấy code</button>
-        </div>
-        <div class="wos-frames" id="wos-frames"></div>
-      </div>
+    const codeViewer = shadow.getElementById('code-viewer');
+    const btnRefreshCode = shadow.getElementById('btn-refresh-code');
+    const btnCopyCode = shadow.getElementById('btn-copy-code');
+    const btnDownloadCode = shadow.getElementById('btn-download-code');
 
-      <!-- Panel 2: Source Inspector & Export -->
-      <div class="wos-panel" id="panel-inspector">
-        <div class="wos-pad">
-          <div class="wos-row">
-            <button class="wos-btn primary" id="wos-load-host-src">Code trang hiện tại</button>
-            <button class="wos-btn" id="wos-preview-code">Chạy thành tab mới</button>
-            <button class="wos-btn" id="wos-copy-code">Copy</button>
-            <button class="wos-btn" id="wos-download-html">Tải .html</button>
-          </div>
-          <textarea class="wos-textarea" id="wos-code" spellcheck="false" placeholder="Mã nguồn HTML hiển thị hoặc dán tại đây..."></textarea>
-        </div>
-      </div>
+    const tiktokUrlInput = shadow.getElementById('tiktok-url');
+    const btnGoTiktok = shadow.getElementById('btn-go-tiktok');
+    const tiktokFrame = shadow.getElementById('tiktok-frame');
 
-      <!-- Panel 3: Notes -->
-      <div class="wos-panel" id="panel-notes">
-        <div class="wos-pad">
-          <div class="wos-row">
-            <button class="wos-btn primary" id="wos-save-note">Lưu</button>
-            <button class="wos-btn" id="wos-clear-note">Xoá</button>
-          </div>
-          <textarea class="wos-textarea" id="wos-note-area" placeholder="Ghi chú nhanh..."></textarea>
-        </div>
-      </div>
-    </div>
+    let tiktokLoaded = false;
 
-    <div class="wos-toast" id="wos-toast"></div>
-  `;
-  document.body.appendChild(root);
+    // Hàm lấy toàn bộ HTML của trang web hiện tại
+    function extractFullCode() {
+        const doctype = document.doctype
+            ? new XMLSerializer().serializeToString(document.doctype) + '\n'
+            : '<!DOCTYPE html>\n';
+        const fullHTML = doctype + document.documentElement.outerHTML;
+        codeViewer.value = fullHTML;
+    }
 
-  const $ = (sel) => root.querySelector(sel);
-  const win = $('#wos-win');
-  const header = $('#wos-header');
+    // Bật / Tắt UI
+    function toggleUI() {
+        const isOpen = mainUI.classList.toggle('open');
+        toggleBtn.textContent = isOpen ? 'Ẩn' : 'UI';
+        if (isOpen && !codeViewer.value) {
+            extractFullCode();
+        }
+    }
 
-  function toast(msg) {
-    const el = $('#wos-toast');
-    el.textContent = msg;
-    el.classList.add('show');
-    clearTimeout(el._t);
-    el._t = setTimeout(() => el.classList.remove('show'), 2000);
-  }
-
-  function setOpen(open) {
-    win.classList.toggle('open', open);
-  }
-
-  $('#wos-fab').onclick = () => setOpen(!win.classList.contains('open'));
-  $('#wos-min').onclick = () => setOpen(false);
-  $('#wos-close').onclick = () => setOpen(false);
-  $('#wos-max').onclick = () => win.classList.toggle('maximized');
-
-  const themes = ['', 'theme-emerald', 'theme-sunset'];
-  let themeIdx = 0;
-  $('#wos-theme-btn').onclick = () => {
-    themeIdx = (themeIdx + 1) % themes.length;
-    root.className = themes[themeIdx];
-    toast('Đã đổi theme');
-  };
-
-  // Drag window (mouse + touch)
-  let dragging = false, sx = 0, sy = 0, ox = 0, oy = 0;
-  header.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('button') || win.classList.contains('maximized')) return;
-    dragging = true;
-    sx = e.clientX;
-    sy = e.clientY;
-    ox = win.offsetLeft;
-    oy = win.offsetTop;
-    header.setPointerCapture(e.pointerId);
-  });
-  header.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    win.style.left = Math.max(0, ox + (e.clientX - sx)) + 'px';
-    win.style.top = Math.max(0, oy + (e.clientY - sy)) + 'px';
-  });
-  header.addEventListener('pointerup', () => { dragging = false; });
-
-  // Mode switcher
-  function switchMode(mode) {
-    root.querySelectorAll('.wos-modebar .wos-btn[data-mode]').forEach((b) => {
-      b.classList.toggle('active', b.dataset.mode === mode);
+    closeUiBtn.addEventListener('click', () => {
+        mainUI.classList.remove('open');
+        toggleBtn.textContent = 'UI';
     });
-    root.querySelectorAll('.wos-panel').forEach((p) => {
-      p.classList.toggle('active', p.id === 'panel-' + mode);
+
+    // Chuyển đổi giữa các Tab
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            tabBtns.forEach(b => b.classList.remove('active'));
+            tabContents.forEach(c => c.classList.remove('active'));
+
+            btn.classList.add('active');
+            const targetId = btn.getAttribute('data-target');
+            shadow.getElementById(targetId).classList.add('active');
+
+            // Tự động tải TikTok lần đầu khi bấm sang tab TikTok
+            if (targetId === 'tab-tiktok' && !tiktokLoaded) {
+                tiktokFrame.src = tiktokUrlInput.value;
+                tiktokLoaded = true;
+            }
+        });
     });
-  }
 
-  root.querySelectorAll('.wos-modebar .wos-btn[data-mode]').forEach((btn) => {
-    btn.onclick = () => switchMode(btn.dataset.mode);
-  });
-
-  // Multi-tab browser
-  const tabs = [];
-  let activeTabId = null;
-  let seq = 1;
-
-  function defaultPageHtml() {
-    return `<!DOCTYPE html><html><body style="margin:0;padding:20px;font-family:sans-serif;background:#0f172a;color:#f8fafc;">
-      <h3 style="margin-top:0;">Mini Browser Tab</h3>
-      <p style="color:#94a3b8;font-size:13px;">Nhập URL ở thanh trên hoặc bấm <b>Lấy code</b> để xem/tải HTML.</p>
-    </body></html>`;
-  }
-
-  function createTab(title = 'Tab mới', srcdoc = defaultPageHtml(), url = '') {
-    const id = 'wos-t-' + (seq++);
-    const iframe = document.createElement('iframe');
-    iframe.className = 'wos-frame';
-    iframe.id = 'frame-' + id;
-    iframe.sandbox = 'allow-scripts allow-forms allow-same-origin allow-popups';
-    if (srcdoc) iframe.srcdoc = srcdoc;
-    else if (url) iframe.src = url;
-
-    $('#wos-frames').appendChild(iframe);
-    tabs.push({ id, title, url, srcdoc });
-    selectTab(id);
-  }
-
-  function selectTab(id) {
-    activeTabId = id;
-    const tab = tabs.find((t) => t.id === id);
-    if (!tab) return;
-    root.querySelectorAll('.wos-frame').forEach((f) => {
-      f.classList.toggle('active', f.id === 'frame-' + id);
+    // Sự kiện nút Lấy lại Code
+    btnRefreshCode.addEventListener('click', () => {
+        extractFullCode();
+        btnRefreshCode.textContent = 'Đã cập nhật!';
+        setTimeout(() => btnRefreshCode.textContent = 'Lấy lại Code', 1200);
     });
-    $('#wos-url').value = tab.url || '';
-    renderTabs();
-  }
 
-  function removeTab(id, e) {
-    if (e) e.stopPropagation();
-    if (tabs.length <= 1) return toast('Giữ tối thiểu 1 tab');
-    const idx = tabs.findIndex((t) => t.id === id);
-    if (idx === -1) return;
-    $('#frame-' + id)?.remove();
-    tabs.splice(idx, 1);
-    if (activeTabId === id) {
-      selectTab(tabs[Math.max(0, idx - 1)].id);
-    } else {
-      renderTabs();
+    // Sự kiện nút Copy Code
+    btnCopyCode.addEventListener('click', () => {
+        if (!codeViewer.value) extractFullCode();
+        if (typeof GM_setClipboard !== 'undefined') {
+            GM_setClipboard(codeViewer.value);
+        } else {
+            codeViewer.select();
+            document.execCommand('copy');
+        }
+        btnCopyCode.textContent = 'Đã Copy!';
+        setTimeout(() => btnCopyCode.textContent = 'Copy Code', 1500);
+    });
+
+    // Sự kiện nút Tải file HTML
+    btnDownloadCode.addEventListener('click', () => {
+        if (!codeViewer.value) extractFullCode();
+        const blob = new Blob([codeViewer.value], { type: 'text/html;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const pageTitle = (document.title || 'source-code').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        a.href = url;
+        a.download = `${pageTitle}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    // Điều hướng TikTok trong iframe
+    btnGoTiktok.addEventListener('click', () => {
+        let val = tiktokUrlInput.value.trim();
+        if (!val) return;
+        if (val.startsWith('@')) {
+            val = `https://www.tiktok.com/${val}`;
+        } else if (!val.startsWith('http')) {
+            val = `https://www.tiktok.com/search?q=${encodeURIComponent(val)}`;
+        }
+        tiktokUrlInput.value = val;
+        tiktokFrame.src = val;
+        tiktokLoaded = true;
+    });
+
+    // Hỗ trợ kéo thả nút tròn nổi (Cả cảm ứng điện thoại và chuột máy tính)
+    let isDragging = false;
+    let hasMoved = false;
+    let startX, startY, initialLeft, initialTop;
+
+    function onDragStart(e) {
+        isDragging = true;
+        hasMoved = false;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const rect = toggleBtn.getBoundingClientRect();
+        startX = clientX;
+        startY = clientY;
+        initialLeft = rect.left;
+        initialTop = rect.top;
     }
-  }
 
-  function renderTabs() {
-    const strip = $('#wos-tabs');
-    const addBtn = $('#wos-add-tab');
-    strip.querySelectorAll('.wos-tab').forEach((el) => el.remove());
+    function onDragMove(e) {
+        if (!isDragging) return;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
 
-    tabs.forEach((tab) => {
-      const el = document.createElement('div');
-      el.className = 'wos-tab' + (tab.id === activeTabId ? ' active' : '');
-      el.onclick = () => selectTab(tab.id);
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+            hasMoved = true;
+        }
 
-      const label = document.createElement('span');
-      label.textContent = tab.title;
-      label.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+        if (hasMoved) {
+            e.preventDefault();
+            let newLeft = initialLeft + dx;
+            let newTop = initialTop + dy;
 
-      const close = document.createElement('span');
-      close.textContent = '×';
-      close.style.cssText = 'padding-left:4px;font-weight:700;';
-      close.onclick = (e) => removeTab(tab.id, e);
+            // Giới hạn không cho kéo nút ra ngoài màn hình
+            newLeft = Math.max(5, Math.min(window.innerWidth - 53, newLeft));
+            newTop = Math.max(5, Math.min(window.innerHeight - 53, newTop));
 
-      el.appendChild(label);
-      el.appendChild(close);
-      strip.insertBefore(el, addBtn);
-    });
-  }
-
-  function normalizeUrl(raw) {
-    const v = raw.trim();
-    if (!v) return '';
-    if (/^https?:\/\//i.test(v)) return v;
-    if (v.includes('.') && !v.includes(' ')) return 'https://' + v;
-    return 'https://duckduckgo.com/?q=' + encodeURIComponent(v);
-  }
-
-  function goUrl(raw) {
-    const tab = tabs.find((t) => t.id === activeTabId);
-    const target = normalizeUrl(raw);
-    if (!tab || !target) return;
-
-    tab.url = target;
-    tab.srcdoc = '';
-    tab.title = target.replace(/^https?:\/\//i, '').split('/')[0] || target;
-
-    const frame = $('#frame-' + tab.id);
-    frame.removeAttribute('srcdoc');
-    frame.src = target;
-    renderTabs();
-  }
-
-  $('#wos-add-tab').onclick = () => createTab();
-  $('#wos-go').onclick = () => goUrl($('#wos-url').value);
-  $('#wos-url').addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') goUrl(e.target.value);
-  });
-  $('#wos-reload').onclick = () => {
-    const frame = $('#frame-' + activeTabId);
-    if (!frame) return;
-    if (frame.hasAttribute('srcdoc')) frame.srcdoc = frame.srcdoc;
-    else frame.src = frame.src;
-    toast('Đã tải lại tab');
-  };
-
-  // Inspector & Export
-  function grabSource() {
-    const tab = tabs.find((t) => t.id === activeTabId);
-    const area = $('#wos-code');
-    if (tab && tab.srcdoc) {
-      area.value = tab.srcdoc;
-      toast('Đã lấy code tab hiện tại');
-      return;
+            toggleBtn.style.left = newLeft + 'px';
+            toggleBtn.style.top = newTop + 'px';
+            toggleBtn.style.right = 'auto';
+            toggleBtn.style.bottom = 'auto';
+        }
     }
-    const frame = tab && $('#frame-' + tab.id);
-    try {
-      if (frame && frame.contentDocument && frame.contentDocument.documentElement) {
-        area.value = frame.contentDocument.documentElement.outerHTML;
-        toast('Đã lấy code iframe');
-        return;
-      }
-    } catch (_) {}
 
-    const clone = document.documentElement.cloneNode(true);
-    clone.querySelector('#' + ROOT_ID)?.remove();
-    clone.querySelector('#' + STYLE_ID)?.remove();
-    area.value = '<!DOCTYPE html>\n' + clone.outerHTML;
-    toast('Đã lấy code trang chính (đã lọc UI userscript)');
-  }
+    function onDragEnd() {
+        if (!isDragging) return;
+        isDragging = false;
+        // Nếu chỉ bấm nhẹ chứ không kéo thì mở/tắt UI
+        if (!hasMoved) {
+            toggleUI();
+        }
+    }
 
-  $('#wos-grab').onclick = () => {
-    grabSource();
-    switchMode('inspector');
-  };
-  $('#wos-load-host-src').onclick = grabSource;
+    toggleBtn.addEventListener('mousedown', onDragStart);
+    window.addEventListener('mousemove', onDragMove);
+    window.addEventListener('mouseup', onDragEnd);
 
-  $('#wos-preview-code').onclick = () => {
-    const code = $('#wos-code').value;
-    if (!code.trim()) return toast('Chưa có code');
-    createTab('Preview', code, '');
-    switchMode('browser');
-  };
+    toggleBtn.addEventListener('touchstart', onDragStart, { passive: false });
+    window.addEventListener('touchmove', onDragMove, { passive: false });
+    window.addEventListener('touchend', onDragEnd);
 
-  $('#wos-copy-code').onclick = () => {
-    navigator.clipboard?.writeText($('#wos-code').value)
-      .then(() => toast('Đã copy code'))
-      .catch(() => toast('Không thể copy tự động'));
-  };
-
-  $('#wos-download-html').onclick = () => {
-    const code = $('#wos-code').value;
-    if (!code.trim()) return toast('Chưa có code để tải');
-    const blob = new Blob([code], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'page-source.html';
-    a.click();
-    URL.revokeObjectURL(url);
-    toast('Đã tải page-source.html');
-  };
-
-  // Notes
-  const NOTE_KEY = 'wos_us_notes_v1';
-  $('#wos-note-area').value = localStorage.getItem(NOTE_KEY) || '';
-  $('#wos-save-note').onclick = () => {
-    localStorage.setItem(NOTE_KEY, $('#wos-note-area').value);
-    toast('Đã lưu ghi chú');
-  };
-  $('#wos-clear-note').onclick = () => {
-    $('#wos-note-area').value = '';
-    localStorage.removeItem(NOTE_KEY);
-    toast('Đã xoá ghi chú');
-  };
-
-  createTab('Home');
 })();
