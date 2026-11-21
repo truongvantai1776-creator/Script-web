@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Safari Clipboard & Full Code UI
+// @name         Safari Clipboard, Auto-Paste Input & Full Code UI
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  Copy chữ/T HUB, hỗ trợ mở tab mới và lấy full code trang hiện tại
+// @version      2.1
+// @description  Copy chữ/T HUB, mở tab mới, tự dán vào ô input đang focus trên trang hiện tại và lấy full code trang hiện tại
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,10 +10,25 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self || document.getElementById("safari-clip-ui")) return;
+  if (window.top !== window.self || document.getElementById("safari-autopaste-ui")) return;
+
+  let lastCopiedText = "";
+  let lastFocusedInput = null;
+
+  document.addEventListener(
+    "focusin",
+    (e) => {
+      const el = e.target;
+      if (!el || el.closest("#safari-autopaste-ui")) return;
+      if (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable) {
+        lastFocusedInput = el;
+      }
+    },
+    true
+  );
 
   const root = document.createElement("div");
-  root.id = "safari-clip-ui";
+  root.id = "safari-autopaste-ui";
   root.style.cssText = `
     position: fixed;
     bottom: 18px;
@@ -25,7 +40,7 @@
   `;
 
   root.innerHTML = `
-    <button id="sc-toggle-btn" type="button" style="
+    <button id="sa-toggle-btn" type="button" style="
       background: #0ea5e9;
       color: #ffffff;
       border: none;
@@ -36,7 +51,7 @@
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     ">Mở UI</button>
 
-    <div id="sc-panel" style="
+    <div id="sa-panel" style="
       display: none;
       margin-top: 8px;
       width: 350px;
@@ -50,7 +65,7 @@
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
         <strong>UI Safari & Full Code</strong>
-        <button id="sc-close-btn" type="button" style="
+        <button id="sa-close-btn" type="button" style="
           background: transparent;
           color: #94a3b8;
           border: 1px solid #334155;
@@ -61,39 +76,43 @@
       </div>
 
       <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-        <div style="font-weight:600;margin-bottom:6px;">Chuẩn Bị Từ Khóa Cho Safari</div>
-        <input id="sc-input" type="text" placeholder="Nhập chữ cần tìm (hoặc URL)..." style="
+        <div style="font-weight:600;margin-bottom:6px;">Từ Khóa & Dán Nhanh</div>
+        <input id="sa-input" type="text" placeholder="Nhập chữ cần tìm (hoặc URL)..." style="
           width:100%;box-sizing:border-box;padding:7px 9px;margin-bottom:6px;
           border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;
         " />
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button id="sc-copy-open-btn" type="button" style="
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">
+          <button id="sa-copy-open-btn" type="button" style="
             flex:1;background:#16a34a;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;font-weight:600;
           ">Copy & Mở Tab</button>
-          <button id="sc-thub-btn" type="button" style="
+          <button id="sa-thub-btn" type="button" style="
             background:#0284c7;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;font-weight:600;
           ">T HUB</button>
         </div>
-        <div id="sc-status" style="font-size:11px;color:#94a3b8;margin-top:6px;">
-          Nhập chữ hoặc bấm T HUB để copy sẵn và mở tab mới cho Safari.
+        <button id="sa-paste-focused-btn" type="button" style="
+          width:100%;background:#7c3aed;color:#fff;border:none;border-radius:6px;
+          padding:6px 10px;cursor:pointer;font-weight:600;
+        ">Tự dán vào ô đang chọn trên trang</button>
+        <div id="sa-status" style="font-size:11px;color:#94a3b8;margin-top:6px;">
+          Không tự dán vào thanh địa chỉ tab mới/Safari được; bấm nút tím để dán vào ô input trên trang hiện tại.
         </div>
       </div>
 
       <div style="background:#1e293b;padding:8px;border-radius:8px;">
         <div style="font-weight:600;margin-bottom:6px;">Full Code Trang Hiện Tại</div>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="sc-get-code" type="button" style="
+          <button id="sa-get-code" type="button" style="
             background:#0284c7;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Lấy Full Code</button>
-          <button id="sc-copy-code" type="button" style="
+          <button id="sa-copy-code" type="button" style="
             background:#475569;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Copy</button>
         </div>
-        <textarea id="sc-code-area" rows="8" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
+        <textarea id="sa-code-area" rows="8" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
           width:100%;box-sizing:border-box;background:#020617;color:#e2e8f0;
           border:1px solid #334155;border-radius:6px;padding:6px;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
@@ -104,16 +123,17 @@
 
   document.body.appendChild(root);
 
-  const toggleBtn = document.getElementById("sc-toggle-btn");
-  const closeBtn = document.getElementById("sc-close-btn");
-  const panel = document.getElementById("sc-panel");
-  const input = document.getElementById("sc-input");
-  const copyOpenBtn = document.getElementById("sc-copy-open-btn");
-  const thubBtn = document.getElementById("sc-thub-btn");
-  const statusEl = document.getElementById("sc-status");
-  const getCodeBtn = document.getElementById("sc-get-code");
-  const copyCodeBtn = document.getElementById("sc-copy-code");
-  const codeArea = document.getElementById("sc-code-area");
+  const toggleBtn = document.getElementById("sa-toggle-btn");
+  const closeBtn = document.getElementById("sa-close-btn");
+  const panel = document.getElementById("sa-panel");
+  const input = document.getElementById("sa-input");
+  const copyOpenBtn = document.getElementById("sa-copy-open-btn");
+  const thubBtn = document.getElementById("sa-thub-btn");
+  const pasteFocusedBtn = document.getElementById("sa-paste-focused-btn");
+  const statusEl = document.getElementById("sa-status");
+  const getCodeBtn = document.getElementById("sa-get-code");
+  const copyCodeBtn = document.getElementById("sa-copy-code");
+  const codeArea = document.getElementById("sa-code-area");
 
   function setOpen(open) {
     panel.style.display = open ? "block" : "none";
@@ -121,10 +141,14 @@
   }
 
   function isDirectUrl(text) {
-    return /^https?:\/\//i.test(text) || (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text));
+    return (
+      /^https?:\/\//i.test(text) ||
+      (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text))
+    );
   }
 
   async function copyText(str) {
+    lastCopiedText = str;
     try {
       await navigator.clipboard.writeText(str);
     } catch {
@@ -135,6 +159,35 @@
       document.execCommand("copy");
       temp.remove();
     }
+  }
+
+  async function readClipboardOrFallback() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) return text;
+    } catch {}
+    return input.value.trim() || lastCopiedText || "T HUB";
+  }
+
+  function fillTargetElement(el, text) {
+    if (!el) return false;
+    el.focus();
+    if (el.isContentEditable) {
+      el.textContent = text;
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      return true;
+    }
+    const proto =
+      el.tagName === "TEXTAREA" ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const descriptor = Object.getOwnPropertyDescriptor(proto, "value");
+    if (descriptor && descriptor.set) {
+      descriptor.set.call(el, text);
+    } else {
+      el.value = text;
+    }
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
   }
 
   async function runAction(raw) {
@@ -153,15 +206,8 @@
     }
 
     await copyText(text);
-    const tab = window.open("about:blank", "_blank", "noopener,noreferrer");
-    statusEl.textContent = `Đã copy "${text}" — hãy dán vào thanh tìm kiếm của Safari.`;
-
-    // Trên iOS/Safari, pop-up blocker hoặc cơ chế tab có thể giữ hoặc đóng tab trống tùy cài đặt
-    if (tab && !tab.closed) {
-      try {
-        tab.focus();
-      } catch {}
-    }
+    window.open("about:blank", "_blank", "noopener,noreferrer");
+    statusEl.textContent = `Đã copy "${text}" — thanh địa chỉ Safari không cho script tự dán trực tiếp.`;
   }
 
   toggleBtn.addEventListener("click", () => setOpen(panel.style.display !== "block"));
@@ -178,6 +224,16 @@
   thubBtn.addEventListener("click", () => {
     input.value = "T HUB";
     runAction("T HUB");
+  });
+
+  pasteFocusedBtn.addEventListener("click", async () => {
+    const textToPaste = await readClipboardOrFallback();
+    const ok = fillTargetElement(lastFocusedInput, textToPaste);
+    if (ok) {
+      statusEl.textContent = `Đã dán "${textToPaste}" vào ô đang chọn trên trang.`;
+    } else {
+      statusEl.textContent = `Chưa thấy ô input nào được chọn trên trang (đã giữ sẵn "${textToPaste}").`;
+    }
   });
 
   getCodeBtn.addEventListener("click", () => {
