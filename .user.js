@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         T-HUB Web Inspector & Mini TikTok
+// @name         T-HUB Web Inspector & Mini TikTok (In-UI)
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Lấy full source code trang web hiện tại và lướt TikTok ngay trong UI nổi
+// @version      1.1
+// @description  Lấy full source code trang web hiện tại và xem trong UI không mở tab mới
 // @author       T HUB
 // @match        *://*/*
 // @grant        GM_setClipboard
@@ -12,10 +12,8 @@
 (function() {
     'use strict';
 
-    // Tránh chạy trùng lặp nhiều lần trong các iframe con
     if (window.top !== window.self) return;
 
-    // Tạo Shadow DOM để CSS của script không bị xung đột với trang web hiện tại
     const host = document.createElement('div');
     host.id = 'thub-userscript-host';
     host.style.cssText = 'position: fixed; top: 0; left: 0; z-index: 2147483647; pointer-events: none;';
@@ -23,7 +21,6 @@
 
     const shadow = host.attachShadow({ mode: 'open' });
 
-    // CSS Giao diện (Tối ưu cho cả điện thoại và máy tính)
     const style = document.createElement('style');
     style.textContent = `
         * {
@@ -32,7 +29,6 @@
             margin: 0;
             padding: 0;
         }
-        /* Nút bật/tắt UI nổi */
         #toggle-btn {
             position: fixed;
             bottom: 80px;
@@ -53,13 +49,7 @@
             pointer-events: auto;
             user-select: none;
             touch-action: none;
-            transition: transform 0.15s ease;
         }
-        #toggle-btn:active {
-            transform: scale(0.92);
-        }
-
-        /* Khung UI chính */
         #main-ui {
             position: fixed;
             top: 50%;
@@ -82,8 +72,6 @@
         #main-ui.open {
             display: flex;
         }
-
-        /* Header UI */
         .header {
             display: flex;
             justify-content: space-between;
@@ -109,8 +97,6 @@
             font-weight: 600;
             cursor: pointer;
         }
-
-        /* Thanh chuyển Tab */
         .tabs {
             display: flex;
             background: #16161d;
@@ -126,15 +112,12 @@
             font-weight: 600;
             cursor: pointer;
             border-bottom: 2px solid transparent;
-            transition: all 0.2s;
         }
         .tab-btn.active {
             color: #ffffff;
             border-bottom: 2px solid #00f2fe;
             background: #1f1f29;
         }
-
-        /* Nội dung các Tab */
         .tab-content {
             flex: 1;
             display: none;
@@ -145,8 +128,6 @@
         .tab-content.active {
             display: flex;
         }
-
-        /* Tab 1: Source Code */
         .code-actions {
             display: flex;
             gap: 8px;
@@ -162,17 +143,9 @@
             cursor: pointer;
             color: #fff;
             background: #2b2b36;
-            transition: background 0.2s;
         }
-        .action-btn.primary {
-            background: #007aff;
-        }
-        .action-btn.success {
-            background: #28a745;
-        }
-        .action-btn:active {
-            opacity: 0.8;
-        }
+        .action-btn.primary { background: #007aff; }
+        .action-btn.success { background: #28a745; }
         #code-viewer {
             flex: 1;
             width: 100%;
@@ -188,10 +161,9 @@
             white-space: pre;
             overflow: auto;
         }
-
-        /* Tab 2: TikTok */
         #tab-tiktok {
             padding: 0;
+            position: relative;
         }
         .tiktok-bar {
             display: flex;
@@ -220,24 +192,34 @@
             font-weight: 600;
             cursor: pointer;
         }
+        .tiktok-bar button.reload-btn {
+            background: #2b2b36;
+        }
+        .frame-wrap {
+            flex: 1;
+            position: relative;
+            background: #0d0d12;
+            display: flex;
+            flex-direction: column;
+        }
         #tiktok-frame {
             flex: 1;
             width: 100%;
             height: 100%;
             border: none;
-            background: #000;
+            background: transparent;
         }
-        .tiktok-note {
+        .frame-status {
             font-size: 11px;
-            color: #aaa;
+            color: #b5b5c3;
             padding: 6px 10px;
             background: #16161d;
+            border-top: 1px solid #2c2c35;
             text-align: center;
         }
     `;
     shadow.appendChild(style);
 
-    // Cấu trúc HTML của UI
     const container = document.createElement('div');
     container.innerHTML = `
         <div id="toggle-btn" title="Mở/Tắt Menu">UI</div>
@@ -253,7 +235,6 @@
                 <button class="tab-btn" data-target="tab-tiktok">Lướt TikTok</button>
             </div>
 
-            <!-- TAB 1: LẤY CODE WEB -->
             <div id="tab-code" class="tab-content active">
                 <div class="code-actions">
                     <button class="action-btn primary" id="btn-refresh-code">Lấy lại Code</button>
@@ -263,20 +244,21 @@
                 <textarea id="code-viewer" readonly placeholder="Nhấn 'Lấy lại Code' để tải mã nguồn trang hiện tại..."></textarea>
             </div>
 
-            <!-- TAB 2: TIKTOK -->
             <div id="tab-tiktok" class="tab-content">
                 <div class="tiktok-bar">
                     <input type="text" id="tiktok-url" value="https://www.tiktok.com/foryou" placeholder="Nhập link TikTok hoặc @username...">
                     <button id="btn-go-tiktok">Đi</button>
+                    <button class="reload-btn" id="btn-reload-tiktok">Tải lại</button>
                 </div>
-                <iframe id="tiktok-frame" src="about:blank" allow="autoplay; fullscreen; encrypted-media" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
-                <div class="tiktok-note">Nếu trang bị chặn nhúng (X-Frame), hãy bấm <a href="https://www.tiktok.com" target="_blank" style="color:#00f2fe;">Mở Tab Mới</a></div>
+                <div class="frame-wrap">
+                    <iframe id="tiktok-frame" src="about:blank" allow="autoplay; fullscreen; encrypted-media"></iframe>
+                </div>
+                <div class="frame-status" id="frame-status">Chế độ xem trực tiếp trong UI (không mở tab mới).</div>
             </div>
         </div>
     `;
     shadow.appendChild(container);
 
-    // Các phần tử DOM trong Shadow
     const toggleBtn = shadow.getElementById('toggle-btn');
     const mainUI = shadow.getElementById('main-ui');
     const closeUiBtn = shadow.getElementById('close-ui-btn');
@@ -290,20 +272,19 @@
 
     const tiktokUrlInput = shadow.getElementById('tiktok-url');
     const btnGoTiktok = shadow.getElementById('btn-go-tiktok');
+    const btnReloadTiktok = shadow.getElementById('btn-reload-tiktok');
     const tiktokFrame = shadow.getElementById('tiktok-frame');
+    const frameStatus = shadow.getElementById('frame-status');
 
     let tiktokLoaded = false;
 
-    // Hàm lấy toàn bộ HTML của trang web hiện tại
     function extractFullCode() {
         const doctype = document.doctype
             ? new XMLSerializer().serializeToString(document.doctype) + '\n'
             : '<!DOCTYPE html>\n';
-        const fullHTML = doctype + document.documentElement.outerHTML;
-        codeViewer.value = fullHTML;
+        codeViewer.value = doctype + document.documentElement.outerHTML;
     }
 
-    // Bật / Tắt UI
     function toggleUI() {
         const isOpen = mainUI.classList.toggle('open');
         toggleBtn.textContent = isOpen ? 'Ẩn' : 'UI';
@@ -312,12 +293,30 @@
         }
     }
 
+    function loadTikTokInFrame(rawUrl) {
+        let val = (rawUrl || '').trim();
+        if (!val) return;
+        if (val.startsWith('@')) {
+            val = `https://www.tiktok.com/${val}`;
+        } else if (!val.startsWith('http')) {
+            val = `https://www.tiktok.com/search?q=${encodeURIComponent(val)}`;
+        }
+        tiktokUrlInput.value = val;
+        frameStatus.textContent = 'Đang tải nội dung trong khung UI...';
+        tiktokFrame.src = val;
+        tiktokLoaded = true;
+    }
+
+    tiktokFrame.addEventListener('load', () => {
+        if (tiktokFrame.src === 'about:blank') return;
+        frameStatus.textContent = 'Đã gửi yêu cầu tải. Nếu vẫn đen/trắng là trình duyệt đang chặn nhúng TikTok.';
+    });
+
     closeUiBtn.addEventListener('click', () => {
         mainUI.classList.remove('open');
         toggleBtn.textContent = 'UI';
     });
 
-    // Chuyển đổi giữa các Tab
     tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
             tabBtns.forEach(b => b.classList.remove('active'));
@@ -327,22 +326,18 @@
             const targetId = btn.getAttribute('data-target');
             shadow.getElementById(targetId).classList.add('active');
 
-            // Tự động tải TikTok lần đầu khi bấm sang tab TikTok
             if (targetId === 'tab-tiktok' && !tiktokLoaded) {
-                tiktokFrame.src = tiktokUrlInput.value;
-                tiktokLoaded = true;
+                loadTikTokInFrame(tiktokUrlInput.value);
             }
         });
     });
 
-    // Sự kiện nút Lấy lại Code
     btnRefreshCode.addEventListener('click', () => {
         extractFullCode();
         btnRefreshCode.textContent = 'Đã cập nhật!';
         setTimeout(() => btnRefreshCode.textContent = 'Lấy lại Code', 1200);
     });
 
-    // Sự kiện nút Copy Code
     btnCopyCode.addEventListener('click', () => {
         if (!codeViewer.value) extractFullCode();
         if (typeof GM_setClipboard !== 'undefined') {
@@ -355,7 +350,6 @@
         setTimeout(() => btnCopyCode.textContent = 'Copy Code', 1500);
     });
 
-    // Sự kiện nút Tải file HTML
     btnDownloadCode.addEventListener('click', () => {
         if (!codeViewer.value) extractFullCode();
         const blob = new Blob([codeViewer.value], { type: 'text/html;charset=utf-8' });
@@ -368,21 +362,14 @@
         URL.revokeObjectURL(url);
     });
 
-    // Điều hướng TikTok trong iframe
     btnGoTiktok.addEventListener('click', () => {
-        let val = tiktokUrlInput.value.trim();
-        if (!val) return;
-        if (val.startsWith('@')) {
-            val = `https://www.tiktok.com/${val}`;
-        } else if (!val.startsWith('http')) {
-            val = `https://www.tiktok.com/search?q=${encodeURIComponent(val)}`;
-        }
-        tiktokUrlInput.value = val;
-        tiktokFrame.src = val;
-        tiktokLoaded = true;
+        loadTikTokInFrame(tiktokUrlInput.value);
     });
 
-    // Hỗ trợ kéo thả nút tròn nổi (Cả cảm ứng điện thoại và chuột máy tính)
+    btnReloadTiktok.addEventListener('click', () => {
+        loadTikTokInFrame(tiktokUrlInput.value);
+    });
+
     let isDragging = false;
     let hasMoved = false;
     let startX, startY, initialLeft, initialTop;
@@ -414,8 +401,6 @@
             e.preventDefault();
             let newLeft = initialLeft + dx;
             let newTop = initialTop + dy;
-
-            // Giới hạn không cho kéo nút ra ngoài màn hình
             newLeft = Math.max(5, Math.min(window.innerWidth - 53, newLeft));
             newTop = Math.max(5, Math.min(window.innerHeight - 53, newTop));
 
@@ -429,7 +414,6 @@
     function onDragEnd() {
         if (!isDragging) return;
         isDragging = false;
-        // Nếu chỉ bấm nhẹ chứ không kéo thì mở/tắt UI
         if (!hasMoved) {
             toggleUI();
         }
@@ -442,5 +426,4 @@
     toggleBtn.addEventListener('touchstart', onDragStart, { passive: false });
     window.addEventListener('touchmove', onDragMove, { passive: false });
     window.addEventListener('touchend', onDragEnd);
-
 })();
