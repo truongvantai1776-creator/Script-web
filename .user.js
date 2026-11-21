@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Mini Browser Search UI & Full Code
+// @name         Safari Tab Opener UI & Full Code
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  Nhập từ khóa hoặc URL bất kỳ để hiện phần chọn trình duyệt mini, xem trong UI và lấy full code trang hiện tại
+// @version      1.3
+// @description  Nhập từ khóa hoặc URL bất kỳ để hiện nút mở tab mới nhanh, xem trong UI và lấy full code trang hiện tại
 // @match        *://*/*
 // @grant        none
 // ==/UserScript==
@@ -10,10 +10,10 @@
 (function () {
   "use strict";
 
-  if (window.top !== window.self || document.getElementById("mini-browser-ui-root")) return;
+  if (window.top !== window.self || document.getElementById("safari-tab-ui-root")) return;
 
   const root = document.createElement("div");
-  root.id = "mini-browser-ui-root";
+  root.id = "safari-tab-ui-root";
   root.style.cssText = `
     position: fixed;
     bottom: 18px;
@@ -25,7 +25,7 @@
   `;
 
   root.innerHTML = `
-    <button id="mb-toggle-btn" type="button" style="
+    <button id="st-toggle-btn" type="button" style="
       background: #2563eb;
       color: #ffffff;
       border: none;
@@ -36,7 +36,7 @@
       box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
     ">Mở UI</button>
 
-    <div id="mb-panel" style="
+    <div id="st-panel" style="
       display: none;
       margin-top: 8px;
       width: 360px;
@@ -49,8 +49,8 @@
       box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     ">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-        <strong>Safari Mini UI & Full Code</strong>
-        <button id="mb-close-btn" type="button" style="
+        <strong>UI Mở Tab & Full Code</strong>
+        <button id="st-close-btn" type="button" style="
           background: transparent;
           color: #94a3b8;
           border: 1px solid #334155;
@@ -62,14 +62,14 @@
 
       <!-- Ô nhập từ khóa hoặc URL -->
       <div style="background:#1e293b;padding:8px;border-radius:8px;margin-bottom:10px;">
-        <div style="font-weight:600;margin-bottom:6px;">Tìm Từ Khóa / Mở URL</div>
-        <input id="mb-query-input" type="text" placeholder="Nhập từ khóa bất kỳ hoặc địa chỉ web..." style="
+        <div style="font-weight:600;margin-bottom:6px;">Nhập Từ Khóa / URL</div>
+        <input id="st-query-input" type="text" placeholder="Nhập từ khóa hoặc địa chỉ web..." style="
           width:100%;box-sizing:border-box;padding:7px 9px;
           border-radius:6px;border:1px solid #475569;background:#0f172a;color:#fff;
         " />
 
-        <!-- Phần chọn trình duyệt / công cụ tự hiện khi có nội dung nhập -->
-        <div id="mb-browser-picker" style="
+        <!-- Tự hiện khi có nội dung nhập -->
+        <div id="st-action-box" style="
           display: none;
           margin-top: 8px;
           padding: 8px;
@@ -78,32 +78,22 @@
           border-radius: 8px;
         ">
           <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">
-            Chọn trình duyệt / công cụ cho: <span id="mb-preview-text" style="color:#e2e8f0;font-weight:600;"></span>
+            Nội dung: <span id="st-preview-text" style="color:#e2e8f0;font-weight:600;"></span>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;">
-            <button class="mb-engine-btn" data-engine="google" type="button" style="
-              flex:1;background:#2563eb;color:#fff;border:none;border-radius:6px;
-              padding:6px 8px;cursor:pointer;font-size:12px;
-            ">Google</button>
-            <button class="mb-engine-btn" data-engine="duckduckgo" type="button" style="
-              flex:1;background:#0d9488;color:#fff;border:none;border-radius:6px;
-              padding:6px 8px;cursor:pointer;font-size:12px;
-            ">DuckGo</button>
-            <button class="mb-engine-btn" data-engine="direct" type="button" style="
-              flex:1;background:#7c3aed;color:#fff;border:none;border-radius:6px;
-              padding:6px 8px;cursor:pointer;font-size:12px;
-            ">Mở URL</button>
-          </div>
-          <div style="display:flex;gap:6px;margin-top:6px;">
-            <button id="mb-open-tab-btn" type="button" style="
-              width:100%;background:#334155;color:#fff;border:none;border-radius:6px;
-              padding:5px 8px;cursor:pointer;font-size:12px;
-            ">Mở ở tab mới (nếu trang chặn iframe)</button>
+            <button id="st-open-tab" type="button" style="
+              flex:1;background:#0ea5e9;color:#fff;border:none;border-radius:6px;
+              padding:7px 10px;cursor:pointer;font-weight:600;font-size:12px;
+            ">Mở tab mới (Safari)</button>
+            <button id="st-open-frame" type="button" style="
+              background:#7c3aed;color:#fff;border:none;border-radius:6px;
+              padding:7px 10px;cursor:pointer;font-size:12px;
+            ">Xem trong UI</button>
           </div>
         </div>
 
-        <iframe id="mb-frame" src="about:blank" style="
-          width:100%;height:190px;margin-top:8px;border:1px solid #475569;
+        <iframe id="st-frame" src="about:blank" style="
+          width:100%;height:170px;margin-top:8px;border:1px solid #475569;
           border-radius:6px;background:#ffffff;
         "></iframe>
       </div>
@@ -112,16 +102,16 @@
       <div style="background:#1e293b;padding:8px;border-radius:8px;">
         <div style="font-weight:600;margin-bottom:6px;">Full Code Trang Hiện Tại</div>
         <div style="display:flex;gap:6px;margin-bottom:6px;">
-          <button id="mb-get-code" type="button" style="
+          <button id="st-get-code" type="button" style="
             background:#0284c7;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Lấy Full Code</button>
-          <button id="mb-copy-code" type="button" style="
+          <button id="st-copy-code" type="button" style="
             background:#475569;color:#fff;border:none;border-radius:6px;
             padding:6px 10px;cursor:pointer;
           ">Copy</button>
         </div>
-        <textarea id="mb-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
+        <textarea id="st-code-area" rows="7" placeholder="Mã nguồn HTML sẽ hiển thị tại đây..." style="
           width:100%;box-sizing:border-box;background:#020617;color:#e2e8f0;
           border:1px solid #334155;border-radius:6px;padding:6px;
           font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
@@ -132,46 +122,36 @@
 
   document.body.appendChild(root);
 
-  const toggleBtn = document.getElementById("mb-toggle-btn");
-  const closeBtn = document.getElementById("mb-close-btn");
-  const panel = document.getElementById("mb-panel");
-  const queryInput = document.getElementById("mb-query-input");
-  const browserPicker = document.getElementById("mb-browser-picker");
-  const previewText = document.getElementById("mb-preview-text");
-  const openTabBtn = document.getElementById("mb-open-tab-btn");
-  const frame = document.getElementById("mb-frame");
-  const getCodeBtn = document.getElementById("mb-get-code");
-  const copyCodeBtn = document.getElementById("mb-copy-code");
-  const codeArea = document.getElementById("mb-code-area");
+  const toggleBtn = document.getElementById("st-toggle-btn");
+  const closeBtn = document.getElementById("st-close-btn");
+  const panel = document.getElementById("st-panel");
+  const queryInput = document.getElementById("st-query-input");
+  const actionBox = document.getElementById("st-action-box");
+  const previewText = document.getElementById("st-preview-text");
+  const openTabBtn = document.getElementById("st-open-tab");
+  const openFrameBtn = document.getElementById("st-open-frame");
+  const frame = document.getElementById("st-frame");
+  const getCodeBtn = document.getElementById("st-get-code");
+  const copyCodeBtn = document.getElementById("st-copy-code");
+  const codeArea = document.getElementById("st-code-area");
 
-  let selectedEngine = "google";
-
-  function buildTargetUrl(rawInput, engine) {
+  function resolveUrl(rawInput) {
     const text = (rawInput || "").trim();
     if (!text) return "";
-
-    const looksLikeDomainOrUrl =
-      /^https?:\/\//i.test(text) ||
-      (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text));
-
-    if (engine === "direct" || (looksLikeDomainOrUrl && engine !== "google" && engine !== "duckduckgo")) {
-      return /^https?:\/\//i.test(text) ? text : "https://" + text;
+    if (/^https?:\/\//i.test(text)) return text;
+    if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/?#].*)?$/i.test(text) && !/\s/.test(text)) {
+      return "https://" + text;
     }
-
-    const encoded = encodeURIComponent(text);
-    if (engine === "duckduckgo") {
-      return `https://duckduckgo.com/?q=${encoded}`;
-    }
-    return `https://www.google.com/search?q=${encoded}&igu=1`;
+    return "https://www.google.com/search?q=" + encodeURIComponent(text);
   }
 
-  function refreshPickerVisibility() {
+  function refreshActionBox() {
     const val = queryInput.value.trim();
     if (val.length > 0) {
-      browserPicker.style.display = "block";
+      actionBox.style.display = "block";
       previewText.textContent = val;
     } else {
-      browserPicker.style.display = "none";
+      actionBox.style.display = "none";
       previewText.textContent = "";
     }
   }
@@ -184,27 +164,24 @@
   toggleBtn.addEventListener("click", () => setOpen(panel.style.display !== "block"));
   closeBtn.addEventListener("click", () => setOpen(false));
 
-  queryInput.addEventListener("input", refreshPickerVisibility);
+  queryInput.addEventListener("input", refreshActionBox);
 
   queryInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      const url = buildTargetUrl(queryInput.value, selectedEngine);
-      if (url) frame.src = url;
+      const targetUrl = resolveUrl(queryInput.value);
+      if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
     }
   });
 
-  document.querySelectorAll(".mb-engine-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      selectedEngine = btn.getAttribute("data-engine") || "google";
-      const url = buildTargetUrl(queryInput.value, selectedEngine);
-      if (url) frame.src = url;
-    });
+  openTabBtn.addEventListener("click", () => {
+    const targetUrl = resolveUrl(queryInput.value);
+    if (targetUrl) window.open(targetUrl, "_blank", "noopener,noreferrer");
   });
 
-  openTabBtn.addEventListener("click", () => {
-    const url = buildTargetUrl(queryInput.value, selectedEngine);
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
+  openFrameBtn.addEventListener("click", () => {
+    const targetUrl = resolveUrl(queryInput.value);
+    if (targetUrl) frame.src = targetUrl;
   });
 
   getCodeBtn.addEventListener("click", () => {
